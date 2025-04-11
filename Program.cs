@@ -9,12 +9,22 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add configuration from environment variable
+builder.Configuration.AddEnvironmentVariables();
+
+var serviceBusConnectionString = Environment.GetEnvironmentVariable("SERVICEBUS_CONNECTIONSTRING");
+
+if (!string.IsNullOrEmpty(serviceBusConnectionString))
+{
+    builder.Configuration["ServiceBus:ConnectionString"] = serviceBusConnectionString;
+}
+
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// ✅ Register ApplicationDbContext
+//  Register ApplicationDbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
