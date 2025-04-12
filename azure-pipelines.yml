@@ -1,34 +1,129 @@
-# ASP.NET Core (.NET Framework)
-# Build and test ASP.NET Core projects targeting the full .NET Framework.
-# Add steps that publish symbols, save build artifacts, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
-
 trigger:
-- main
-
-pool:
-  vmImage: 'windows-latest'
+  branches:
+    include:
+      - main
+      - develop
 
 variables:
-  solution: '**/*.sln'
-  buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
 
-steps:
-- task: NuGetToolInstaller@1
+stages:
 
-- task: NuGetCommand@2
-  inputs:
-    restoreSolution: '$(solution)'
+# -------------------
+# CI - Build Stage
+# -------------------
+- stage: Build
+  displayName: 'Build & Publish (.NET 8)'
+  jobs:
+    - job: Build
+      displayName: 'Build Job'
+      pool:
+        vmImage: 'windows-latest'
+      steps:
+        - task: UseDotNet@2
+          displayName: 'Install .NET 8 SDK'
+          inputs:
+            packageType: 'sdk'
+            version: '8.0.x'
+            includePreviewVersions: true
 
-- task: VSBuild@1
-  inputs:
-    solution: '$(solution)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:DesktopBuildPackageLocation="$(build.artifactStagingDirectory)\WebApp.zip" /p:DeployIisAppPath="Default Web Site"'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+        - task: DotNetCoreCLI@2
+          displayName: 'Restore NuGet packages'
+          inputs:
+            command: 'restore'
+            projects: '**/*.csproj'
 
-- task: VSTest@2
-  inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+        - task: DotNetCoreCLI@2
+          displayName: 'Build Solution'
+          inputs:
+            command: 'build'
+            arguments: '--configuration $(buildConfiguration)'
+
+        - task: DotNetCoreCLI@2
+          displayName: 'Publish Artifacts'
+          inputs:
+            command: 'publish'
+            publishWebProjects: true
+            arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+            zipAfterPublish: true
+
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Artifact to Pipeline'
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+            ArtifactName: 'drop'
+            publishLocation: 'Container'
+
+# -------------------
+# CD - Dev Deployment
+# -------------------
+- stage: Deploy_Dev
+  displayName: 'Deploy to Dev'
+  dependsOn: Build
+  jobs:
+    - deployment: DeployDev
+      environment: 'Development'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: drop
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy to Azure Web App (Dev)'
+                inputs:
+                  azureSubscription: 'RamsanAzureServiceCon'
+                  appType: 'webApp'
+                  appName: 'HospitalQueueSystem'
+                  package: '$(Pipeline.Workspace)/drop/**/*.zip'
+
+# -------------------
+# CD - QA Deployment
+# -------------------
+- stage: Deploy_QA
+  displayName: 'Deploy to QA'
+  dependsOn: Deploy_Dev
+  condition: succeeded()
+  jobs:
+    - deployment: DeployQA
+      environment: 'Staging'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: drop
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy to Azure Web App (QA)'
+                inputs:
+                  azureSubscription: 'RamsanAzureServiceCon'
+                  appType: 'webApp'
+                  appName: 'HospitalQueueSystem'
+                  package: '$(Pipeline.Workspace)/drop/**/*.zip'
+
+# -------------------
+# CD - Prod Deployment (with Approval)
+# -------------------
+- stage: Deploy_Prod
+  displayName: 'Deploy to Prod'
+  dependsOn: Deploy_QA
+  condition: succeeded()
+  jobs:
+    - deployment: DeployProd
+      environment: 'Production'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: drop
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy to Azure Web App (Prod)'
+                inputs:
+                  azureSubscription: 'RamsanAzureServiceCon'
+                  appType: 'webApp'
+                  appName: 'HospitalQueueSystem'
+                  package: '$(Pipeline.Workspace)/drop/**/*.zip'
