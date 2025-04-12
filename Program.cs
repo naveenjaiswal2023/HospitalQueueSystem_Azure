@@ -16,7 +16,7 @@ var serviceBusConnectionString = Environment.GetEnvironmentVariable("SERVICEBUS_
 
 if (!string.IsNullOrEmpty(serviceBusConnectionString))
 {
-    builder.Configuration["ServiceBus:ConnectionString"] = serviceBusConnectionString;
+    builder.Configuration["AzureServiceBus:ConnectionString"] = serviceBusConnectionString;
 }
 
 // Add services to the container
