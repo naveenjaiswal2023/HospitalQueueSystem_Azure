@@ -75,4 +75,6 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<QueueHub>("/queuehub");
 
+app.MapGet("/", () => Results.Ok("🏥 Hospital Queue System API is running"));
+
 app.Run();
