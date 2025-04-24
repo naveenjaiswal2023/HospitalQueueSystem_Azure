@@ -1,4 +1,4 @@
-trigger:
+﻿trigger:
   branches:
     include:
       - main
@@ -107,7 +107,7 @@ stages:
                   package: '$(Pipeline.Workspace)/drop/**/*.zip'
 
 # -------------------
-# CD - Prod Deployment (with Approval)
+# CD - Prod Deployment (with Rollback Logic)
 # -------------------
 - stage: Deploy_Prod
   displayName: 'Deploy to Prod'
@@ -124,6 +124,7 @@ stages:
               - download: current
                 artifact: drop
 
+              # Main Deployment
               - task: AzureWebApp@1
                 displayName: 'Deploy to Azure Web App (Prod)'
                 inputs:
@@ -131,3 +132,30 @@ stages:
                   appType: 'webApp'
                   appName: 'HospitalQueueSystem'
                   package: '$(Pipeline.Workspace)/drop/**/*.zip'
+
+              # Save this good artifact for rollback
+              - task: CopyFiles@2
+                displayName: 'Cache Artifact for Rollback'
+                condition: succeeded()
+                inputs:
+                  SourceFolder: '$(Pipeline.Workspace)/drop'
+                  Contents: '**/*.zip'
+                  TargetFolder: '$(Pipeline.Workspace)/rollback'
+
+              # 🔁 Rollback Step
+              - task: AzureCLI@2
+                displayName: 'Rollback Deployment (Previous Stable Build)'
+                condition: failed()
+                inputs:
+                  azureSubscription: 'RamsanAzureServiceCon'
+                  scriptType: 'ps'
+                  scriptLocation: 'inlineScript'
+                  inlineScript: |
+                    Write-Host "Deployment failed. Initiating rollback..."
+
+                    $zipPath = "$(Pipeline.Workspace)/rollback/**/*.zip"
+
+                    az webapp deployment source config-zip `
+                      --resource-group "Your-Resource-Group-Name" `
+                      --name "HospitalQueueSystem" `
+                      --src $zipPath
