@@ -1,4 +1,5 @@
-﻿using Azure.Identity;
+﻿using AspNetCoreRateLimit;
+using Azure.Identity;
 using HospitalQueueSystem.Application.Handlers;
 using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.Infrastructure.AzureBus;
@@ -10,33 +11,30 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 🌐 Add environment variables
+// Add environment variables
 builder.Configuration.AddEnvironmentVariables();
 
+// Azure Key Vault integration
 var keyVaultUrl = builder.Configuration["AzureKeyVault:VaultUrl"];
 if (!string.IsNullOrEmpty(keyVaultUrl))
 {
-    // Use Visual Studio Credential explicitly
     var credential = new VisualStudioCredential();
     builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), credential);
 }
 
-// Read database password and replace
+// Replace database password placeholder dynamically
 var dbPassword = builder.Configuration["QmsDbPassword"];
 var connTemplate = builder.Configuration.GetConnectionString("DefaultConnection");
 var actualConnectionString = connTemplate.Replace("QmsDbPassword", dbPassword);
+
 // Register DB Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(actualConnectionString));
+    options.UseSqlServer(actualConnectionString, sqlOptions =>
+        sqlOptions.EnableRetryOnFailure()
+    )
+);
 
-// 🔌 Register ApplicationDbContext with the actual connection string
-//builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//    options.UseSqlServer(actualConnectionString));
-
-// SignalR
-builder.Services.AddSignalR();
-
-// Service Bus connection string from environment
+// Azure Service Bus connection from environment variable
 var serviceBusConnectionString = Environment.GetEnvironmentVariable("SERVICEBUS_CONNECTIONSTRING");
 if (!string.IsNullOrEmpty(serviceBusConnectionString))
 {
@@ -50,10 +48,18 @@ builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<DoctorQueueCreatedEventHandler>();
 builder.Services.AddScoped<PatientRegisteredEventHandler>();
 
-// Azure Service Bus
 builder.Services.AddSingleton<IQueuePublisher, AzureServiceBusPublisher>();
 builder.Services.AddSingleton<IQueueSubscriber, AzureServiceBusSubscriber>();
 builder.Services.AddHostedService<AzureServiceBusBackgroundService>();
+
+// SignalR
+builder.Services.AddSignalR();
+
+// Rate Limiting
+builder.Services.AddMemoryCache(); // REQUIRED for AspNetCoreRateLimit
+builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+builder.Services.AddInMemoryRateLimiting();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -64,26 +70,33 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials()
-            .SetIsOriginAllowed(origin => true); // dev only
+            .SetIsOriginAllowed(_ => true); // Allow all origins (dev only)
     });
 });
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Controllers
 builder.Services.AddControllers();
+
 var app = builder.Build();
 
+// Middleware Pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseCors();
+app.UseHttpsRedirection();
 app.UseRouting();
+app.UseCors();
+app.UseIpRateLimiting();   // ➔ Must be after CORS, before Authorization
 app.UseAuthorization();
 
+// Endpoints
 app.MapControllers();
 app.MapHub<QueueHub>("/queuehub");
 

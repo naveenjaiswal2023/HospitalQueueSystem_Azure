@@ -17,7 +17,7 @@ namespace HospitalQueueSystem.Infrastructure.AzureBus
         public AzureServiceBusPublisher(IConfiguration configuration, ILogger<AzureServiceBusPublisher> logger)
         {
             _client = new ServiceBusClient(configuration["AzureServiceBus:ConnectionString"]);
-            _doctorSender = _client.CreateSender(configuration["AzureServiceBus:DoctorQueue"]);
+            _doctorSender = _client.CreateSender(configuration["AzureServiceBus:DoctorQueueTopic"]);
             _patientSender = _client.CreateSender(configuration["AzureServiceBus:PatientQueue"]);
             _logger = logger;
         }
