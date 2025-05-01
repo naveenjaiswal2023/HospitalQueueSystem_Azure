@@ -78,8 +78,6 @@ namespace HospitalQueueSystem.WebAPI.Controllers
             }
         }
 
-
-
         [HttpGet("GetAllPatients")]
         public async Task<IActionResult> GetAllPatients()
         {

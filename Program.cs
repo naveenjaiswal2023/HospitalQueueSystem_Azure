@@ -12,8 +12,35 @@ using HospitalQueueSystem.WebAPI.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using HospitalQueueSystem.Domain.Events;
+using Serilog;
+using Serilog.Events;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
+
+//Log.Logger = new LoggerConfiguration()
+//    .Enrich.FromLogContext()
+//    .WriteTo.Console()
+//    .WriteTo.File("AppLogs/log-.txt", rollingInterval: RollingInterval.Day)
+//    .CreateLogger();
+
+var configuration = builder.Configuration;
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.AzureBlobStorage(
+        connectionString: configuration["Logging:BlobStorage:ConnectionString"],
+        storageContainerName: configuration["Logging:BlobStorage:ContainerName"],
+        storageFileName: "log-{Date}.txt",
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+        restrictedToMinimumLevel: LogEventLevel.Information,
+        useUtcTimeZone: true,
+        bypassBlobCreationValidation: true // <- Helps in skipping container validation at startup
+    )
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 // Add environment variables
 builder.Configuration.AddEnvironmentVariables();
