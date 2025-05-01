@@ -15,15 +15,7 @@ using HospitalQueueSystem.Domain.Events;
 using Serilog;
 using Serilog.Events;
 
-
-
 var builder = WebApplication.CreateBuilder(args);
-
-//Log.Logger = new LoggerConfiguration()
-//    .Enrich.FromLogContext()
-//    .WriteTo.Console()
-//    .WriteTo.File("AppLogs/log-.txt", rollingInterval: RollingInterval.Day)
-//    .CreateLogger();
 
 var configuration = builder.Configuration;
 
@@ -36,7 +28,7 @@ Log.Logger = new LoggerConfiguration()
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
         restrictedToMinimumLevel: LogEventLevel.Information,
         useUtcTimeZone: true,
-        bypassBlobCreationValidation: true // <- Helps in skipping container validation at startup
+        bypassBlobCreationValidation: true 
     )
     .CreateLogger();
 
@@ -129,16 +121,10 @@ builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssemblyContaining<RegisterPatientCommandHandler>();
 });
 
-
 // Azure Service Bus Publisher & Subscriber
 builder.Services.AddSingleton<IPublisher, AzurePublisher>();
-//builder.Services.AddSingleton<IQueueSubscriber, AzureServiceBusSubscriber>();
-builder.Services.AddHostedService<AzureBusBackgroundService>();  // Ensure AzureBusBackgroundService is registered after List<TopicSubscriptionPair>
-
+builder.Services.AddHostedService<AzureBusBackgroundService>();
 builder.Services.AddSingleton<AzureServiceBusSubscriber>();
-
-//builder.Services.AddScoped<ISubscriber<DoctorQueueCreatedEvent>, DoctorQueueCreatedEventHandler>();
-//builder.Services.AddScoped<ISubscriber<PatientRegisteredEvent>, PatientRegisteredEventHandler>();
 
 // SignalR
 builder.Services.AddSignalR();
