@@ -1,25 +1,27 @@
 ﻿using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.Infrastructure.Repositories;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace HospitalQueueSystem.Infrastructure.Data
 {
     public class UnitOfWork : IUnitOfWork
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ApplicationDbContext _dbContext;
+        private IDbContextTransaction _transaction;
 
-        public UnitOfWork(ApplicationDbContext context)
+        public ApplicationDbContext Context => _dbContext;
+
+        public UnitOfWork(ApplicationDbContext dbContext)
         {
-            _context = context;
-            DoctorQueues = new DoctorQueueRepository(_context);
-            Patients = new PatientRepository(_context);
+            _dbContext = dbContext;
         }
 
-        public IDoctorQueueRepository DoctorQueues { get; private set; }
-        public IPatientRepository Patients { get; private set; }
-
-        public async Task<int> CompleteAsync()
-        {
-            return await _context.SaveChangesAsync();
-        }
+        public async Task<int> SaveChangesAsync() => await _dbContext.SaveChangesAsync();
+        public async Task BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
+            => _transaction = await _dbContext.Database.BeginTransactionAsync(isolationLevel);
+        public async Task CommitTransactionAsync() => await _transaction?.CommitAsync();
+        public async Task RollbackTransactionAsync() => await _transaction?.RollbackAsync();
     }
 }

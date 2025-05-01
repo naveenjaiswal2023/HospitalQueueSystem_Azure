@@ -1,11 +1,14 @@
-﻿using System.Threading.Tasks;
+﻿using HospitalQueueSystem.Infrastructure.Data;
+using System.Data;
+using System.Threading.Tasks;
 namespace HospitalQueueSystem.Domain.Interfaces
 {
     public interface IUnitOfWork
     {
-        IDoctorQueueRepository DoctorQueues { get; }
-        IPatientRepository Patients { get; }
-
-        Task<int> CompleteAsync();
+        ApplicationDbContext Context { get; }
+        Task BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
+        Task CommitTransactionAsync();
+        Task RollbackTransactionAsync();
+        Task<int> SaveChangesAsync();
     }
 }

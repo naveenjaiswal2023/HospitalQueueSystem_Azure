@@ -27,8 +27,8 @@ namespace HospitalQueueSystem.Application.Handlers
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _unitOfWork.DoctorQueues.AddAsync(doctorQueue);
-            await _unitOfWork.CompleteAsync();
+            //await _unitOfWork.DoctorQueues.AddAsync(doctorQueue);
+            //await _unitOfWork.CompleteAsync();
 
             await _hubContext.Clients.All.SendAsync("DoctorQueueUpdated", doctorQueue);
         }

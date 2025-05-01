@@ -1,78 +1,82 @@
 ﻿using Azure.Messaging.ServiceBus;
 using HospitalQueueSystem.Application.Handlers;
+using HospitalQueueSystem.Domain.Entities;
 using HospitalQueueSystem.Domain.Events;
 using HospitalQueueSystem.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Concurrent;
+using System;
 using System.Text.Json;
 
 namespace HospitalQueueSystem.Infrastructure.AzureBus
 {
-    public class AzureServiceBusSubscriber : IQueueSubscriber
+    public class AzureServiceBusSubscriber
     {
-        private readonly ServiceBusProcessor _doctorQueueProcessor;
-        private readonly ServiceBusProcessor _patientQueueProcessor;
-        private readonly IServiceScopeFactory _serviceScopeFactory;
+        private readonly IServiceScopeFactory _scopeFactory;
+        private readonly List<ServiceBusProcessor> _processors = new();
 
-        public AzureServiceBusSubscriber(IConfiguration configuration, IServiceScopeFactory scopeFactory)
+        public AzureServiceBusSubscriber(IConfiguration config, IServiceScopeFactory scopeFactory)
         {
-            var connectionString = configuration["AzureServiceBus:ConnectionString"];
-            var doctorSubscription = configuration["AzureServiceBus:DoctorQueueSubscription"];
-            var patientQueue = configuration["AzureServiceBus:PatientQueue"];
+            _scopeFactory = scopeFactory;
+            var client = new ServiceBusClient(config["AzureServiceBus:ConnectionString"]);
 
-            var client = new ServiceBusClient(connectionString);
-            _doctorQueueProcessor = client.CreateProcessor(doctorSubscription);
-            _patientQueueProcessor = client.CreateProcessor(patientQueue);
+            _processors.Add(CreateProcessor<DoctorQueueCreatedEvent>(
+                client,
+                config["AzureServiceBus:DoctorQueueTopic"],
+                config["AzureServiceBus:DoctorQueueSubscription"]
+            ));
 
-            _serviceScopeFactory = scopeFactory;
+            _processors.Add(CreateProcessor<PatientRegisteredEvent>(
+                client,
+                config["AzureServiceBus:PatientTopic"],
+                config["AzureServiceBus:PatientSubscription"]
+            ));
+        }
+
+        private ServiceBusProcessor CreateProcessor<TEvent>(ServiceBusClient client, string topic, string subscription)
+        {
+            var processor = client.CreateProcessor(topic, subscription, new ServiceBusProcessorOptions());
+
+            processor.ProcessMessageAsync += async args =>
+            {
+                var body = args.Message.Body.ToString();
+                var @event = JsonSerializer.Deserialize<TEvent>(body);
+
+                if (@event != null)
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var handler = scope.ServiceProvider.GetRequiredService<ISubscriber<TEvent>>();
+                    await handler.HandleAsync(@event);
+                }
+
+                await args.CompleteMessageAsync(args.Message);
+            };
+
+            processor.ProcessErrorAsync += args =>
+            {
+                Console.WriteLine($"Error processing message: {args.Exception}");
+                return Task.CompletedTask;
+            };
+
+            return processor;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            _doctorQueueProcessor.ProcessMessageAsync += HandleDoctorMessageAsync;
-            _doctorQueueProcessor.ProcessErrorAsync += HandleErrorAsync;
-
-            _patientQueueProcessor.ProcessMessageAsync += HandlePatientMessageAsync;
-            _patientQueueProcessor.ProcessErrorAsync += HandleErrorAsync;
-
-            await _doctorQueueProcessor.StartProcessingAsync(cancellationToken);
-            await _patientQueueProcessor.StartProcessingAsync(cancellationToken);
-        }
-
-        private async Task HandleDoctorMessageAsync(ProcessMessageEventArgs args)
-        {
-            var body = args.Message.Body.ToString();
-            var doctorEvent = JsonSerializer.Deserialize<DoctorQueueCreatedEvent>(body);
-
-            if (doctorEvent != null)
+            foreach (var processor in _processors)
             {
-                using var scope = _serviceScopeFactory.CreateScope();
-                var handler = scope.ServiceProvider.GetRequiredService<DoctorQueueCreatedEventHandler>();
-                await handler.HandleAsync(doctorEvent);
+                await processor.StartProcessingAsync(cancellationToken);
             }
-
-            await args.CompleteMessageAsync(args.Message);
         }
 
-        private async Task HandlePatientMessageAsync(ProcessMessageEventArgs args)
+        public async Task StopAsync()
         {
-            var body = args.Message.Body.ToString();
-            var patientEvent = JsonSerializer.Deserialize<PatientRegisteredEvent>(body);
-
-            if (patientEvent != null)
+            foreach (var processor in _processors)
             {
-                using var scope = _serviceScopeFactory.CreateScope();
-                var handler = scope.ServiceProvider.GetRequiredService<PatientRegisteredEventHandler>();
-                await handler.HandleAsync(patientEvent);
+                await processor.StopProcessingAsync();
+                await processor.DisposeAsync();
             }
-
-            await args.CompleteMessageAsync(args.Message);
-        }
-
-        private Task HandleErrorAsync(ProcessErrorEventArgs args)
-        {
-            Console.WriteLine($"Message handler encountered an error: {args.Exception.Message}");
-            return Task.CompletedTask;
         }
     }
 }

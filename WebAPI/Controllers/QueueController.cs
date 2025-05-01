@@ -10,9 +10,9 @@ namespace HospitalQueueSystem.WebAPI.Controllers
     [Route("api/[controller]")]
     public class QueueController : ControllerBase
     {
-        private readonly IQueuePublisher _publisher;
+        private readonly IPublisher _publisher;
 
-        public QueueController(IQueuePublisher publisher)
+        public QueueController(IPublisher publisher)
         {
             _publisher = publisher;
         }
@@ -20,7 +20,7 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         [HttpPost("generate-doctor-queue")]
         public async Task<IActionResult> GenerateDoctorQueue([FromBody] DoctorQueueCreatedEvent @event)
         {
-            await _publisher.PublishDoctorQueueAsync(@event);
+            //await _publisher.PublishDoctorQueueAsync(@event);
             return Ok(new { message = "Doctor queue generation event published." });
         }
     }
