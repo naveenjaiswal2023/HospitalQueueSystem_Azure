@@ -41,6 +41,7 @@ if (!string.IsNullOrEmpty(keyVaultUrl))
 var configuration = builder.Configuration;
 
 // Extract secrets
+var azureServiceBusConnectionString = configuration["AzureServiceBusConnectionString"];
 var blobStorageConnectionString = configuration["BlobStorageConnectionString"];
 var blobContainerName = configuration["Logging:BlobStorage:ContainerName"];
 var dbPassword = configuration["QmsDbPassword"];
@@ -114,10 +115,11 @@ builder.Services.AddAuthentication(options =>
 
 
 // Azure Service Bus connection
-var serviceBusConnectionString = Environment.GetEnvironmentVariable("SERVICEBUS_CONNECTIONSTRING");
-if (!string.IsNullOrEmpty(serviceBusConnectionString))
+//var serviceBusConnectionString = Environment.GetEnvironmentVariable("SERVICEBUS_CONNECTIONSTRING");
+
+if (!string.IsNullOrEmpty(azureServiceBusConnectionString))
 {
-    builder.Configuration["AzureServiceBus:ConnectionString"] = serviceBusConnectionString;
+    builder.Configuration["AzureServiceBus:ConnectionString"] = azureServiceBusConnectionString;
 }
 
 // Register ServiceBusClient (Singleton)
