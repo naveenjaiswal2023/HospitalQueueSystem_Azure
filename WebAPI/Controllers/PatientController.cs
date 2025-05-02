@@ -5,6 +5,7 @@ using HospitalQueueSystem.Application.Services;
 using HospitalQueueSystem.Domain.Events;
 using HospitalQueueSystem.Domain.Interfaces;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ using System.Text.Json;
 
 namespace HospitalQueueSystem.WebAPI.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class PatientController : ControllerBase

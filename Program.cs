@@ -14,6 +14,12 @@ using Microsoft.EntityFrameworkCore;
 using HospitalQueueSystem.Domain.Events;
 using Serilog;
 using Serilog.Events;
+using Azure.Identity;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using HospitalQueueSystem.Infrastructure.Seed;
+using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +34,7 @@ Log.Logger = new LoggerConfiguration()
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
         restrictedToMinimumLevel: LogEventLevel.Information,
         useUtcTimeZone: true,
-        bypassBlobCreationValidation: true 
+        bypassBlobCreationValidation: false 
     )
     .CreateLogger();
 
@@ -42,6 +48,7 @@ var keyVaultUrl = builder.Configuration["AzureKeyVault:VaultUrl"];
 if (!string.IsNullOrEmpty(keyVaultUrl))
 {
     var credential = new Azure.Identity.VisualStudioCredential();
+    //var credential = new AzureCliCredential();
     builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), credential);
 }
 
@@ -53,21 +60,43 @@ var actualConnectionString = connTemplate?.Replace("_QmsDbPassword_", qmsDbPassw
 // Register DB Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // Use the dynamically generated connection string
-    options.UseSqlServer(actualConnectionString,
-        sqlOptions =>
-        {
-            // Replace the incorrect usage of EnableRetryOnFailure with the correct overload
-            options.UseSqlServer(actualConnectionString,
-                sqlOptions =>
-                {
-                    sqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 3, // Maximum retry attempts
-                        maxRetryDelay: TimeSpan.FromSeconds(30), // Retry delay
-                        errorNumbersToAdd: null); // Optional: specify additional error numbers to retry
-                });
-        });
+    // Use the dynamically generated connection string with retry logic
+    options.UseSqlServer(actualConnectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,                         // Maximum retry attempts
+            maxRetryDelay: TimeSpan.FromSeconds(30), // Retry delay
+            errorNumbersToAdd: null);                // Optional: additional error codes to retry
+    });
 });
+
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtDTO>();
+builder.Services.Configure<JwtDTO>(builder.Configuration.GetSection("JwtSettings"));
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    var key = Encoding.UTF8.GetBytes(jwtSettings.Key);
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings.Issuer,
+        ValidAudience = jwtSettings.Audience,
+        IssuerSigningKey = new SymmetricSecurityKey(key)
+    };
+});
+
 
 // Azure Service Bus connection
 var serviceBusConnectionString = Environment.GetEnvironmentVariable("SERVICEBUS_CONNECTIONSTRING");
@@ -108,7 +137,7 @@ builder.Services.AddSingleton(new List<TopicSubscriptionPair>
 //builder.Services.AddSingleton<IPublisher, AzurePublisher>();
 
 // Register other services
-//builder.Services.AddScoped<PatientService>();  // Register PatientService
+builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<PatientController>();  // Register PatientController
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
@@ -153,12 +182,53 @@ builder.Services.AddCors(options =>
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Hospital Queue System API",
+        Version = "v1"
+    });
+
+    //Define the Bearer scheme
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter 'Bearer' followed by your JWT token.\n\nExample: Bearer eyJhbGciOiJIUzI1NiIsIn..."
+    });
+
+    //Apply the scheme globally
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
+});
+
 
 // Controllers
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    await IdentitySeed.SeedRolesAndAdminAsync(services);
+}
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())
@@ -168,25 +238,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// Enable Routing before other middlewares
 app.UseRouting();
-
-// Exception handling middleware (ensure it's implemented)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-// Apply Rate Limiting after routing
 app.UseIpRateLimiting();
-
 app.UseCors();
-
 app.UseAuthentication(); // Only if you're using JWT or similar
 app.UseAuthorization();
-
 // Endpoints
 app.MapControllers();
 app.MapHub<QueueHub>("/queuehub");
-
 app.MapGet("/", () => Results.Ok("🏥 Hospital Queue System API is running"));
-
 app.Run();
