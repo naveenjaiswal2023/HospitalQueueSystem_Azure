@@ -23,39 +23,54 @@ using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Bind appsettings.json
+builder.Configuration
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
+
+// Add Azure Key Vault secrets if VaultUrl is configured
+var keyVaultUrl = builder.Configuration["AzureKeyVault:VaultUrl"];
+if (!string.IsNullOrEmpty(keyVaultUrl))
+{
+    var credential = new VisualStudioCredential(); // Or AzureCliCredential / DefaultAzureCredential
+    builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), credential);
+}
+
+// Final configuration object (after Key Vault is loaded)
 var configuration = builder.Configuration;
 
+// Extract secrets
+var blobStorageConnectionString = configuration["BlobStorageConnectionString"];
+var blobContainerName = configuration["Logging:BlobStorage:ContainerName"];
+var dbPassword = configuration["QmsDbPassword"];
+var connTemplate = configuration.GetConnectionString("DefaultConnection");
+var actualConnectionString = connTemplate?.Replace("_QmsDbPassword_", dbPassword);
+
+// Configure Serilog with Azure Blob Storage
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.AzureBlobStorage(
-        connectionString: configuration["Logging:BlobStorage:ConnectionString"],
-        storageContainerName: configuration["Logging:BlobStorage:ContainerName"],
+        connectionString: blobStorageConnectionString,
+        storageContainerName: blobContainerName,
         storageFileName: "log-{Date}.txt",
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
         restrictedToMinimumLevel: LogEventLevel.Information,
-        useUtcTimeZone: true,
-        bypassBlobCreationValidation: false 
+        useUtcTimeZone: true
     )
     .CreateLogger();
 
+// Use Serilog as the app's logger
 builder.Host.UseSerilog();
 
 // Add environment variables
 builder.Configuration.AddEnvironmentVariables();
 
-// Azure Key Vault integration
-var keyVaultUrl = builder.Configuration["AzureKeyVault:VaultUrl"];
-if (!string.IsNullOrEmpty(keyVaultUrl))
-{
-    var credential = new Azure.Identity.VisualStudioCredential();
-    //var credential = new AzureCliCredential();
-    builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), credential);
-}
 
 // Retrieve the database password from the configuration
-var qmsDbPassword = builder.Configuration["QmsDbPassword"];
-var connTemplate = builder.Configuration.GetConnectionString("DefaultConnection");
-var actualConnectionString = connTemplate?.Replace("_QmsDbPassword_", qmsDbPassword);
+//var qmsDbPassword = builder.Configuration["QmsDbPassword"];
+//var connTemplate = builder.Configuration.GetConnectionString("DefaultConnection");
+//var actualConnectionString = connTemplate?.Replace("_QmsDbPassword_", qmsDbPassword);
 
 // Register DB Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
