@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using HospitalQueueSystem.Domain.Entities;
 using HospitalQueueSystem.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
+using HospitalQueueSystem.Shared.Utilities;
+using Microsoft.AspNetCore.Authorization;
 
 namespace HospitalQueueSystem.WebAPI.Controllers
 {
@@ -15,15 +17,17 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ITokenService _tokenService;
         private readonly SignInManager<ApplicationUser> _signInManager;
-
-        public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, ITokenService tokenService)
+        private readonly IUserContextService _userContextService;
+        public AuthController(IUserContextService userContextService,UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, ITokenService tokenService)
         {
             _userManager = userManager;
             _tokenService = tokenService;
             _signInManager = signInManager;
+            _userContextService = userContextService;
         }
 
         [HttpPost("register-user")]
+        [Authorize]
         public async Task<IActionResult> Register(RegisterRequest model)
         {
             var user = new ApplicationUser
@@ -39,6 +43,22 @@ namespace HospitalQueueSystem.WebAPI.Controllers
 
             await _userManager.AddToRoleAsync(user, "User"); // default role
             return Ok("User created successfully");
+        }
+
+        [HttpGet("whoami")]
+        [Authorize]
+        public IActionResult WhoAmI()
+        {
+            var userId = _userContextService.GetUserId();
+            var userName = _userContextService.GetUserName();
+            var roles = _userContextService.GetUserRoles();
+
+            return Ok(new
+            {
+                UserId = userId,
+                UserName = userName,
+                Roles = roles
+            });
         }
 
         [HttpPost("login")]

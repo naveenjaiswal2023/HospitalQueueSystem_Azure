@@ -20,6 +20,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using HospitalQueueSystem.Infrastructure.Seed;
 using Microsoft.AspNetCore.Identity;
+using HospitalQueueSystem.Shared.Utilities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,27 +52,13 @@ var connTemplate = configuration.GetConnectionString("DefaultConnection");
 var actualConnectionString = connTemplate?.Replace("_QmsDbPassword_", dbPassword);
 
 // Configure Serilog with Azure Blob Storage
-//Log.Logger = new LoggerConfiguration()
-//    .MinimumLevel.Information()
-//    .WriteTo.Console() // Optional: log to console for debugging
-//    .WriteTo.AzureBlobStorage(
-//        connectionString: blobStorageConnectionString,
-//        storageContainerName: blobContainerName,
-//        storageFileName: "log-{Date}.txt",
-//        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-//        restrictedToMinimumLevel: LogEventLevel.Information,
-//        useUtcTimeZone: true
-//    )
-//    .Enrich.FromLogContext()
-//    .CreateLogger();
-
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console()
     .WriteTo.AzureBlobStorage(
         connectionString: blobStorageConnectionString,
         storageContainerName: blobContainerName,
-        storageFileName: "log-{yyyyMMdd}.txt",  // <-- This creates a daily file
+        storageFileName: "log-{yyyyMMdd}.txt",
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level}] {Message}{NewLine}{Exception}",
         restrictedToMinimumLevel: LogEventLevel.Information)
     .CreateLogger();
@@ -181,6 +168,11 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddSingleton<IPublisher, AzurePublisher>();
 builder.Services.AddHostedService<AzureBusBackgroundService>();
 builder.Services.AddSingleton<AzureServiceBusSubscriber>();
+
+// Register IHttpContextAccessor (for accessing user info in services)
+builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+builder.Services.AddScoped<IUserContextService, UserContextService>();
+
 
 // SignalR
 builder.Services.AddSignalR();
