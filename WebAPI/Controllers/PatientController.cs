@@ -13,7 +13,7 @@ using System.Text.Json;
 
 namespace HospitalQueueSystem.WebAPI.Controllers
 {
-    [Authorize]
+    //[Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class PatientController : ControllerBase

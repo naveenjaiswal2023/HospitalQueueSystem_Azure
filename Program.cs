@@ -33,7 +33,9 @@ builder.Configuration
 var keyVaultUrl = builder.Configuration["AzureKeyVault:VaultUrl"];
 if (!string.IsNullOrEmpty(keyVaultUrl))
 {
-    var credential = new VisualStudioCredential(); // Or AzureCliCredential / DefaultAzureCredential
+    //var credential = new VisualStudioCredential(); // Or AzureCliCredential / DefaultAzureCredential
+    var credential = new DefaultAzureCredential();
+
     builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), credential);
 }
 
@@ -49,29 +51,37 @@ var connTemplate = configuration.GetConnectionString("DefaultConnection");
 var actualConnectionString = connTemplate?.Replace("_QmsDbPassword_", dbPassword);
 
 // Configure Serilog with Azure Blob Storage
+//Log.Logger = new LoggerConfiguration()
+//    .MinimumLevel.Information()
+//    .WriteTo.Console() // Optional: log to console for debugging
+//    .WriteTo.AzureBlobStorage(
+//        connectionString: blobStorageConnectionString,
+//        storageContainerName: blobContainerName,
+//        storageFileName: "log-{Date}.txt",
+//        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+//        restrictedToMinimumLevel: LogEventLevel.Information,
+//        useUtcTimeZone: true
+//    )
+//    .Enrich.FromLogContext()
+//    .CreateLogger();
+
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
+    .WriteTo.Console()
     .WriteTo.AzureBlobStorage(
         connectionString: blobStorageConnectionString,
         storageContainerName: blobContainerName,
-        storageFileName: "log-{Date}.txt",
-        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-        restrictedToMinimumLevel: LogEventLevel.Information,
-        useUtcTimeZone: true
-    )
+        storageFileName: "log-{yyyyMMdd}.txt",  // <-- This creates a daily file
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level}] {Message}{NewLine}{Exception}",
+        restrictedToMinimumLevel: LogEventLevel.Information)
     .CreateLogger();
+
 
 // Use Serilog as the app's logger
 builder.Host.UseSerilog();
 
 // Add environment variables
 builder.Configuration.AddEnvironmentVariables();
-
-
-// Retrieve the database password from the configuration
-//var qmsDbPassword = builder.Configuration["QmsDbPassword"];
-//var connTemplate = builder.Configuration.GetConnectionString("DefaultConnection");
-//var actualConnectionString = connTemplate?.Replace("_QmsDbPassword_", qmsDbPassword);
 
 // Register DB Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
