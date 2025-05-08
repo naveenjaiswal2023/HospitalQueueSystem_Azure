@@ -44,7 +44,7 @@ namespace HospitalQueueSystem.Application.Handlers
                     };
 
                     _dbContext.Patients.Add(patient);
-                    await _unitOfWork.SaveChangesAsync();
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                     await _publisher.PublishAsync(request.Event, nameof(PatientRegisteredEvent));
 

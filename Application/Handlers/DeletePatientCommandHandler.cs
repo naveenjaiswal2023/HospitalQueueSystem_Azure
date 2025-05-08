@@ -1,49 +1,44 @@
-﻿using HospitalQueueSystem.Application.CommandModel;
-using HospitalQueueSystem.Domain.Interfaces;
-using HospitalQueueSystem.Infrastructure.Data;
+﻿using HospitalQueueSystem.Domain.Interfaces;
+using HospitalQueueSystem.Application.Commands;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using System.Threading;
+using System.Threading.Tasks;
+using HospitalQueueSystem.Application.CommandModel;
 
 namespace HospitalQueueSystem.Application.Handlers
 {
     public class DeletePatientCommandHandler : IRequestHandler<DeletePatientCommand, bool>
     {
-        private readonly ApplicationDbContext _dbContext;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IPatientRepository _patientRepository;
         private readonly ILogger<DeletePatientCommandHandler> _logger;
 
-        public DeletePatientCommandHandler(ApplicationDbContext dbContext, IUnitOfWork unitOfWork, ILogger<DeletePatientCommandHandler> logger)
+        public DeletePatientCommandHandler(IUnitOfWork unitOfWork, IPatientRepository patientRepository, ILogger<DeletePatientCommandHandler> logger)
         {
-            _dbContext = dbContext;
             _unitOfWork = unitOfWork;
+            _patientRepository = patientRepository;
             _logger = logger;
         }
 
         public async Task<bool> Handle(DeletePatientCommand request, CancellationToken cancellationToken)
         {
-            var strategy = _dbContext.Database.CreateExecutionStrategy();
-
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-                try
+                var result = await _patientRepository.DeleteAsync(request.PatientId);
+                if (result <= 0)
                 {
-                    var patient = await _dbContext.Patients.FindAsync(new object[] { request.PatientId }, cancellationToken);
-                    if (patient == null) return false;
-
-                    _dbContext.Patients.Remove(patient);
-                    await _unitOfWork.SaveChangesAsync();
-
-                    await transaction.CommitAsync(cancellationToken);
-                    return true;
+                    _logger.LogWarning("No rows affected during patient deletion.");
+                    return false; // Deletion failed
                 }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync(cancellationToken);
-                    _logger.LogError(ex, "Error deleting patient.");
-                    return false;
-                }
-            });
+
+                return true; // Successfully deleted
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting patient.");
+                return false; // Error during deletion
+            }
         }
     }
 }

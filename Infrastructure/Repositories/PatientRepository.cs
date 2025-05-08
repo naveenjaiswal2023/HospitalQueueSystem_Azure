@@ -31,7 +31,7 @@ namespace HospitalQueueSystem.Infrastructure.Repositories
             return await _context.Patients.ToListAsync();
         }
 
-        public async Task<int> UpdatePatientAsync(PatientRegisteredEvent model)
+        public async Task<int> UpdateAsync(PatientRegisteredEvent model)
         {
             var patientIdParam = new SqlParameter("@PatientId", model.PatientId);
             var nameParam = new SqlParameter("@Name", model.Name);
@@ -46,7 +46,7 @@ namespace HospitalQueueSystem.Infrastructure.Repositories
             return result; // Returns the number of affected rows
         }
 
-        public async Task<int> DeletePatientAsync(string patientId)
+        public async Task<int> DeleteAsync(string patientId)
         {
             var patientIdParam = new SqlParameter("@PatientId", patientId);
 

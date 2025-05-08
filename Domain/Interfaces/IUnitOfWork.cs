@@ -3,12 +3,14 @@ using System.Data;
 using System.Threading.Tasks;
 namespace HospitalQueueSystem.Domain.Interfaces
 {
-    public interface IUnitOfWork
+    public interface IUnitOfWork : IDisposable
     {
         ApplicationDbContext Context { get; }
+        IPatientRepository Patients { get; }
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken);
         Task BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
         Task CommitTransactionAsync();
         Task RollbackTransactionAsync();
-        Task<int> SaveChangesAsync();
     }
+
 }

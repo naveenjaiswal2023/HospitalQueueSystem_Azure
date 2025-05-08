@@ -1,54 +1,43 @@
 ﻿using HospitalQueueSystem.Application.CommandModel;
 using HospitalQueueSystem.Domain.Interfaces;
-using HospitalQueueSystem.Infrastructure.Data;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace HospitalQueueSystem.Application.Handlers
 {
     public class UpdatePatientCommandHandler : IRequestHandler<UpdatePatientCommand, bool>
     {
-        private readonly ApplicationDbContext _dbContext;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<UpdatePatientCommandHandler> _logger;
 
-        public UpdatePatientCommandHandler(ApplicationDbContext dbContext, IUnitOfWork unitOfWork, ILogger<UpdatePatientCommandHandler> logger)
+        public UpdatePatientCommandHandler(IUnitOfWork unitOfWork, ILogger<UpdatePatientCommandHandler> logger)
         {
-            _dbContext = dbContext;
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
         public async Task<bool> Handle(UpdatePatientCommand request, CancellationToken cancellationToken)
         {
-            var strategy = _dbContext.Database.CreateExecutionStrategy();
-
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-                try
+                await _unitOfWork.BeginTransactionAsync();
+                var rowsAffected = await _unitOfWork.Patients.UpdateAsync(request.Event);
+
+                if (rowsAffected > 0)
                 {
-                    var patient = await _dbContext.Patients.FindAsync(new object[] { request.Event.PatientId }, cancellationToken);
-                    if (patient == null) return false;
-
-                    patient.Name = request.Event.Name;
-                    patient.Age = request.Event.Age;
-                    patient.Gender = request.Event.Gender;
-                    patient.Department = request.Event.Department;
-
-                    _dbContext.Patients.Update(patient);
-                    await _unitOfWork.SaveChangesAsync();
-
-                    await transaction.CommitAsync(cancellationToken);
+                    await _unitOfWork.CommitTransactionAsync();
                     return true;
                 }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync(cancellationToken);
-                    _logger.LogError(ex, "Error updating patient.");
-                    return false;
-                }
-            });
+
+                await _unitOfWork.RollbackTransactionAsync();
+                return false;
+            }
+            catch (Exception ex)
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                _logger.LogError(ex, "Error occurred while updating patient.");
+                return false;
+            }
         }
     }
 }

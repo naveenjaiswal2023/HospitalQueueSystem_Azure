@@ -1,4 +1,5 @@
 ﻿using HospitalQueueSystem.Domain.Entities;
+using HospitalQueueSystem.Domain.Events;
 
 namespace HospitalQueueSystem.Domain.Interfaces
 {
@@ -7,7 +8,8 @@ namespace HospitalQueueSystem.Domain.Interfaces
         Task AddAsync(Patient patient);
         Task<Patient?> GetByIdAsync(int id);
         Task<List<Patient>> GetAllAsync();
-        Task UpdateAsync(Patient patient);
-        Task DeleteAsync(int id);
+        Task<int> UpdateAsync(PatientRegisteredEvent model);
+        Task<int> DeleteAsync(string patientId);
+
     }
 }
