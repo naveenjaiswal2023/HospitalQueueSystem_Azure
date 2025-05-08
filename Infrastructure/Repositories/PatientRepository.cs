@@ -1,9 +1,9 @@
 ﻿using HospitalQueueSystem.Domain.Entities;
+using HospitalQueueSystem.Domain.Events;
 using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.Infrastructure.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace HospitalQueueSystem.Infrastructure.Repositories
 {
@@ -19,7 +19,6 @@ namespace HospitalQueueSystem.Infrastructure.Repositories
         public async Task AddAsync(Patient patient)
         {
             await _context.Patients.AddAsync(patient);
-            await _context.SaveChangesAsync();
         }
 
         public async Task<Patient?> GetByIdAsync(int id)
@@ -32,20 +31,30 @@ namespace HospitalQueueSystem.Infrastructure.Repositories
             return await _context.Patients.ToListAsync();
         }
 
-        public async Task UpdateAsync(Patient patient)
+        public async Task<int> UpdatePatientAsync(PatientRegisteredEvent model)
         {
-            _context.Patients.Update(patient);
-            await _context.SaveChangesAsync();
+            var patientIdParam = new SqlParameter("@PatientId", model.PatientId);
+            var nameParam = new SqlParameter("@Name", model.Name);
+            var ageParam = new SqlParameter("@Age", model.Age);
+            var genderParam = new SqlParameter("@Gender", model.Gender);
+            var departmentParam = new SqlParameter("@Department", model.Department);
+
+            var result = await _context.Database.ExecuteSqlRawAsync(
+                "EXEC UpdatePatient @PatientId, @Name, @Age, @Gender, @Department",
+                patientIdParam, nameParam, ageParam, genderParam, departmentParam);
+
+            return result; // Returns the number of affected rows
         }
 
-        public async Task DeleteAsync(int id)
+        public async Task<int> DeletePatientAsync(string patientId)
         {
-            var entity = await _context.Patients.FindAsync(id);
-            if (entity != null)
-            {
-                _context.Patients.Remove(entity);
-                await _context.SaveChangesAsync();
-            }
+            var patientIdParam = new SqlParameter("@PatientId", patientId);
+
+            var result = await _context.Database.ExecuteSqlRawAsync(
+                "EXEC DeletePatient @PatientId",
+                patientIdParam);
+
+            return result; // Returns the number of affected rows
         }
     }
 }

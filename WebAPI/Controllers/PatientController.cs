@@ -1,4 +1,5 @@
 ﻿using Azure.Messaging.ServiceBus;
+using HospitalQueueSystem.Application.CommandModel;
 using HospitalQueueSystem.Application.Commands;
 using HospitalQueueSystem.Application.Queries;
 using HospitalQueueSystem.Application.Services;
@@ -18,34 +19,14 @@ namespace HospitalQueueSystem.WebAPI.Controllers
     [ApiController]
     public class PatientController : ControllerBase
     {
-        //private readonly ServiceBusSender _sender;
         private readonly ILogger<PatientController> _logger;
-        //private readonly PatientService _patientService;
         private readonly IMediator _mediator;
 
         public PatientController(IMediator mediator, ILogger<PatientController> logger)
         {
-            // _sender = client.CreateSender("patient-topic");
             _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator)); // Ensure mediator is injected
             _logger = logger ?? throw new ArgumentNullException(nameof(logger)); // Ensure logger is injected
         }
-
-        //[HttpPost("register")]
-        //public async Task<IActionResult> RegisterPatient([FromBody] PatientRegisteredEvent @event)
-        //{
-        //    try
-        //    {
-        //        // Call the service to handle both DB and message publishing
-        //        await _patientService.RegisterPatientAsync(@event);
-
-        //        return Ok(new { Message = "Patient Registered Successfully!" });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error occurred while registering patient.");
-        //        return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while registering the patient.");
-        //    }
-        //}
 
         [HttpPost("RegisterPatient")]
         public async Task<IActionResult> RegisterPatient([FromBody] PatientRegisteredEvent @event)
@@ -74,7 +55,7 @@ namespace HospitalQueueSystem.WebAPI.Controllers
             catch (Exception ex)
             {
                 // You can inject and use ILogger<PatientController> if not already
-                // _logger.LogError(ex, "Error occurred while registering patient");
+                _logger.LogError(ex, "Error occurred while registering patient");
 
                 return StatusCode(500, $"An unexpected error occurred: {ex.Message}");
             }
@@ -91,11 +72,54 @@ namespace HospitalQueueSystem.WebAPI.Controllers
             catch (Exception ex)
             {
                 // You could also use a logger here if available
-                // _logger.LogError(ex, "Error occurred while fetching patients.");
+                _logger.LogError(ex, "Error occurred while fetching patients.");
 
                 return StatusCode(500, $"An error occurred while retrieving patients: {ex.Message}");
             }
         }
 
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdatePatient(string id, [FromBody] PatientRegisteredEvent model)
+        {
+            try
+            {
+                if (id != model.PatientId)
+                    return BadRequest("Patient ID mismatch.");
+
+                var command = new UpdatePatientCommand(model);
+                var result = await _mediator.Send(command);
+
+                if (!result)
+                    return NotFound("Patient not found or update failed.");
+
+                return Ok("Patient updated successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating patient with ID {PatientId}", id);
+                return StatusCode(500, "An error occurred while updating the patient.");
+            }
+        }
+
+        // DELETE: api/patient/{id}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeletePatient(string id)
+        {
+            try
+            {
+                var command = new DeletePatientCommand(id);
+                var result = await _mediator.Send(command);
+
+                if (!result)
+                    return NotFound("Patient not found or deletion failed.");
+
+                return Ok("Patient deleted successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting patient with ID {PatientId}", id);
+                return StatusCode(500, "An error occurred while deleting the patient.");
+            }
+        }
     }
 }
