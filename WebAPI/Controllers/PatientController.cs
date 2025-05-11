@@ -1,6 +1,7 @@
 ﻿using Azure.Messaging.ServiceBus;
 using HospitalQueueSystem.Application.CommandModel;
 using HospitalQueueSystem.Application.Commands;
+using HospitalQueueSystem.Application.DTO;
 using HospitalQueueSystem.Application.Queries;
 using HospitalQueueSystem.Application.Services;
 using HospitalQueueSystem.Domain.Events;
@@ -29,22 +30,20 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         }
 
         [HttpPost("RegisterPatient")]
-        public async Task<IActionResult> RegisterPatient([FromBody] PatientRegisteredEvent @event)
+        public async Task<IActionResult> RegisterPatient([FromBody] RegisterPatientDto dto)
         {
             try
             {
-                if (@event == null)
+                if (dto == null ||
+                    string.IsNullOrWhiteSpace(dto.Name) ||
+                    string.IsNullOrWhiteSpace(dto.Gender) ||
+                    string.IsNullOrWhiteSpace(dto.Department) ||
+                    dto.Age <= 0)
                 {
-                    return BadRequest("Patient data must be provided.");
+                    return BadRequest("Invalid patient data.");
                 }
 
-                // Optional: Validate required fields
-                if (string.IsNullOrWhiteSpace(@event.Name) || @event.RegisteredAt == default)
-                {
-                    return BadRequest("Invalid patient details.");
-                }
-
-                var command = new RegisterPatientCommand(@event);
+                var command = new RegisterPatientCommand(dto.Name, dto.Age, dto.Gender, dto.Department);
                 var result = await _mediator.Send(command);
 
                 if (result)
@@ -54,9 +53,7 @@ namespace HospitalQueueSystem.WebAPI.Controllers
             }
             catch (Exception ex)
             {
-                // You can inject and use ILogger<PatientController> if not already
                 _logger.LogError(ex, "Error occurred while registering patient");
-
                 return StatusCode(500, $"An unexpected error occurred: {ex.Message}");
             }
         }

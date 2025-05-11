@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace HospitalQueueSystem.Application.Handlers
+namespace HospitalQueueSystem.WebAPI.Middleware
 {
     public class ExceptionHandlingMiddleware
     {
@@ -28,5 +28,4 @@ namespace HospitalQueueSystem.Application.Handlers
             }
         }
     }
-
 }

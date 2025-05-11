@@ -1,10 +1,8 @@
-﻿using AspNetCoreRateLimit;
-using Azure.Messaging.ServiceBus;
+﻿using Azure.Messaging.ServiceBus;
 using HospitalQueueSystem.Application.Services;
 using HospitalQueueSystem.Application.Handlers;
 using HospitalQueueSystem.Domain.Entities;
 using HospitalQueueSystem.Domain.Interfaces;
-using HospitalQueueSystem.Infrastructure.AzureBus;
 using HospitalQueueSystem.Infrastructure.Data;
 using HospitalQueueSystem.Infrastructure.Repositories;
 using HospitalQueueSystem.WebAPI.Controllers;
@@ -12,15 +10,20 @@ using HospitalQueueSystem.WebAPI.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using HospitalQueueSystem.Domain.Events;
-using Serilog;
-using Serilog.Events;
-using Azure.Identity;
-using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using HospitalQueueSystem.Infrastructure.Seed;
 using Microsoft.AspNetCore.Identity;
 using HospitalQueueSystem.Shared.Utilities;
+using HospitalQueueSystem.Application.Common;
+using HospitalQueueSystem.Infrastructure.Events;
+using HospitalQueueSystem.Application.DTO;
+using AspNetCoreRateLimit;
+using Serilog;
+using Serilog.Events;
+using Azure.Identity;
+using System.Text;
+using HospitalQueueSystem.WebAPI.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,7 +37,6 @@ builder.Configuration
 var keyVaultUrl = builder.Configuration["AzureKeyVault:VaultUrl"];
 if (!string.IsNullOrEmpty(keyVaultUrl))
 {
-    //var credential = new VisualStudioCredential(); // Or AzureCliCredential / DefaultAzureCredential
     var credential = new DefaultAzureCredential();
 
     builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), credential);
@@ -63,7 +65,6 @@ Log.Logger = new LoggerConfiguration()
         restrictedToMinimumLevel: LogEventLevel.Information)
     .CreateLogger();
 
-
 // Use Serilog as the app's logger
 builder.Host.UseSerilog();
 
@@ -87,8 +88,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtDTO>();
-builder.Services.Configure<JwtDTO>(builder.Configuration.GetSection("JwtSettings"));
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtDto>();
+builder.Services.Configure<JwtDto>(builder.Configuration.GetSection("JwtSettings"));
 
 builder.Services.AddAuthentication(options =>
 {
@@ -109,7 +110,6 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
 });
-
 
 // Azure Service Bus connection
 //var serviceBusConnectionString = Environment.GetEnvironmentVariable("SERVICEBUS_CONNECTIONSTRING");
@@ -147,37 +147,31 @@ builder.Services.AddSingleton(new List<TopicSubscriptionPair>
     new TopicSubscriptionPair { TopicName = "doctor-queue", SubscriptionName = "doctor-queue-subscription" }
 });
 
-// Register AzurePublisher as Singleton
-//builder.Services.AddSingleton<IPublisher, AzurePublisher>();
-
 // Register other services
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<PatientController>();  // Register PatientController
+builder.Services.AddScoped<PatientController>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 
 // Event Handlers
 builder.Services.AddScoped<DoctorQueueCreatedEventHandler>();
-//builder.Services.AddScoped<PatientRegisteredEventHandler>();
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssemblyContaining<RegisterPatientCommandHandler>();
 });
 
 // Azure Service Bus Publisher & Subscriber
-builder.Services.AddSingleton<IPublisher, AzurePublisher>();
 builder.Services.AddHostedService<AzureBusBackgroundService>();
-builder.Services.AddSingleton<AzureServiceBusSubscriber>();
+builder.Services.AddScoped<IDomainEventPublisher, DomainEventPublisher>();
 
 // Register IHttpContextAccessor (for accessing user info in services)
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 
-
 // SignalR
 builder.Services.AddSignalR();
 
-// 🧠 In-Memory Caching
+// In-Memory Caching
 builder.Services.AddMemoryCache(); // Register IMemoryCache
 builder.Services.AddScoped<IPatientCacheService, PatientQueueCacheService>();
 
@@ -237,7 +231,6 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-
 // Controllers
 builder.Services.AddControllers();
 
@@ -248,7 +241,6 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     await IdentitySeed.SeedRolesAndAdminAsync(services);
 }
-
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())
 {

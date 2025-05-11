@@ -1,6 +1,6 @@
-﻿namespace HospitalQueueSystem.Domain.Entities
+﻿namespace HospitalQueueSystem.Application.DTO
 {
-    public class JwtDTO
+    public class JwtDto
     {
         public string Key { get; set; }
         public string Issuer { get; set; }

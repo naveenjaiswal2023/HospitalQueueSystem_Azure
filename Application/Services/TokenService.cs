@@ -1,4 +1,5 @@
-﻿using HospitalQueueSystem.Domain.Entities;
+﻿using HospitalQueueSystem.Application.DTO;
+using HospitalQueueSystem.Domain.Entities;
 using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.Infrastructure.Data;
 using Jose;
@@ -13,10 +14,10 @@ namespace HospitalQueueSystem.Application.Services
 {
     public class TokenService : ITokenService
     {
-        private readonly JwtDTO _jwt;
+        private readonly JwtDto _jwt;
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public TokenService(IOptions<JwtDTO> jwtOptions, UserManager<ApplicationUser> userManager)
+        public TokenService(IOptions<JwtDto> jwtOptions, UserManager<ApplicationUser> userManager)
         {
             _jwt = jwtOptions.Value;
             _userManager = userManager;

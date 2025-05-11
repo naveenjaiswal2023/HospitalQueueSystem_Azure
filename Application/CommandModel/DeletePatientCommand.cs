@@ -4,11 +4,8 @@ namespace HospitalQueueSystem.Application.CommandModel
 {
     public class DeletePatientCommand : IRequest<bool>
     {
-        public string PatientId { get; set; }
+        public string PatientId { get; init; }
 
-        public DeletePatientCommand(string patientId)
-        {
-            PatientId = patientId;
-        }
+        public DeletePatientCommand(string patientId) => PatientId = patientId;
     }
 }

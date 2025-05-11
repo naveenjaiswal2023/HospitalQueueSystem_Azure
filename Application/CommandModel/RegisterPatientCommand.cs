@@ -5,11 +5,17 @@ namespace HospitalQueueSystem.Application.Commands
 {
     public class RegisterPatientCommand : IRequest<bool>
     {
-        public PatientRegisteredEvent Event { get; }
+        public string Name { get; }
+        public int Age { get; }
+        public string Gender { get; }
+        public string Department { get; }
 
-        public RegisterPatientCommand(PatientRegisteredEvent @event)
+        public RegisterPatientCommand(string name, int age, string gender, string department)
         {
-            Event = @event;
+            Name = name;
+            Age = age;
+            Gender = gender;
+            Department = department;
         }
     }
 }

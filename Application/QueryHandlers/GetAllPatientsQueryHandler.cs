@@ -6,7 +6,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using MediatR;
 
-namespace HospitalQueueSystem.Application.Handlers
+namespace HospitalQueueSystem.Application.QueryHandlers
 {
     public class GetAllPatientsQueryHandler : IRequestHandler<GetAllPatientsQuery, List<PatientRegisteredEvent>>
     {
@@ -35,18 +35,17 @@ namespace HospitalQueueSystem.Application.Handlers
                 var patients = await _unitOfWork.Context.Patients
                     .AsNoTracking()
                     .OrderByDescending(p => p.RegisteredAt)
-                    .Select(p => new PatientRegisteredEvent
-                    {
-                        PatientId = p.PatientId,
-                        Name = p.Name,
-                        Age = p.Age,
-                        Gender = p.Gender,
-                        Department = p.Department,
-                        RegisteredAt = p.RegisteredAt
-                    })
+                    .Select(p => new PatientRegisteredEvent(
+                        p.PatientId,
+                        p.Name,
+                        p.Age,
+                        p.Gender,
+                        p.Department,
+                        p.RegisteredAt
+                    ))
                     .ToListAsync(cancellationToken);
 
-                if (patients == null || !patients.Any())
+                if (!patients.Any())
                 {
                     _logger.LogWarning("No patients found in the database.");
                     return new List<PatientRegisteredEvent>();

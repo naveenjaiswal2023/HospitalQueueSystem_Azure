@@ -1,9 +1,13 @@
 ﻿using Azure.Messaging.ServiceBus;
+using HospitalQueueSystem.Application.Services;
 using HospitalQueueSystem.Domain.Entities;
 using HospitalQueueSystem.Domain.Events;
 using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.WebAPI.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 public class AzureBusBackgroundService : BackgroundService
@@ -44,7 +48,7 @@ public class AzureBusBackgroundService : BackgroundService
     private async Task OnMessageReceived(ProcessMessageEventArgs args)
     {
         var body = args.Message.Body.ToString();
-        var subject = args.Message.Subject; // Identifies the event type
+        var subject = args.Message.Subject;
 
         try
         {
@@ -53,40 +57,42 @@ public class AzureBusBackgroundService : BackgroundService
             switch (subject)
             {
                 case nameof(PatientRegisteredEvent):
-                    var patientEvent = JsonSerializer.Deserialize<PatientRegisteredEvent>(body);
-                    if (patientEvent != null)
+                    var registeredEvent = JsonSerializer.Deserialize<PatientRegisteredEvent>(body);
+                    if (registeredEvent != null)
                     {
-                        var queueService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
-                        await queueService.AddPatientToCacheAsync(patientEvent);
-                        await _hubContext.Clients.All.SendAsync("NewPatientRegistered", patientEvent);
+                        var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
+                        await cacheService.AddPatientToCacheAsync(registeredEvent);
+                        await _hubContext.Clients.All.SendAsync("NewPatientRegistered", registeredEvent);
                     }
                     break;
 
-                case nameof(DoctorQueueCreatedEvent):
-                    //var calledEvent = JsonSerializer.Deserialize<DoctorQueueCreatedEvent>(body);
-                    //if (calledEvent != null)
-                    //{
-                    //    var callService = scope.ServiceProvider.GetRequiredService<IPatientQueueCacheService>();
-                    //    await callService.CallPatientAsync(calledEvent);
-                    //    await _hubContext.Clients.All.SendAsync("PatientCalled", calledEvent);
-                    //}
-                    //break;
-                    var callService = JsonSerializer.Deserialize<PatientRegisteredEvent>(body);
-                    if (callService != null)
+                case nameof(PatientUpdatedEvent):
+                    var updatedEvent = JsonSerializer.Deserialize<PatientUpdatedEvent>(body);
+                    if (updatedEvent != null)
                     {
-                        var queueService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
-                        await queueService.GetQueueAsync();
-                        await _hubContext.Clients.All.SendAsync("NewPatientRegistered", callService);
+                        var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
+                        //await cacheService.UpdatePatientInCacheAsync(updatedEvent);
+                        await _hubContext.Clients.All.SendAsync("PatientUpdated", updatedEvent);
                     }
                     break;
 
-                //case nameof(DoctorAvailableEvent):
-                //    var doctorEvent = JsonSerializer.Deserialize<DoctorAvailableEvent>(body);
-                //    if (doctorEvent != null)
+                case nameof(PatientDeletedEvent):
+                    var deletedEvent = JsonSerializer.Deserialize<PatientDeletedEvent>(body);
+                    if (deletedEvent != null)
+                    {
+                        var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
+                        //await cacheService.RemovePatientFromCacheAsync(deletedEvent.PatientId);
+                        await _hubContext.Clients.All.SendAsync("PatientDeleted", deletedEvent);
+                    }
+                    break;
+
+                //case nameof(DoctorQueueCreatedEvent):
+                //    var doctorQueueEvent = JsonSerializer.Deserialize<DoctorQueueCreatedEvent>(body);
+                //    if (doctorQueueEvent != null)
                 //    {
-                //        var docService = scope.ServiceProvider.GetRequiredService<IDoctorQueueService>();
-                //        await docService.NotifyDoctorAvailableAsync(doctorEvent);
-                //        await _hubContext.Clients.All.SendAsync("DoctorAvailable", doctorEvent);
+                //        var queueService = scope.ServiceProvider.GetRequiredService<IPatientQueueCacheService>();
+                //        await queueService.CallPatientAsync(doctorQueueEvent);
+                //        await _hubContext.Clients.All.SendAsync("PatientCalled", doctorQueueEvent);
                 //    }
                 //    break;
 
@@ -103,7 +109,6 @@ public class AzureBusBackgroundService : BackgroundService
             await args.AbandonMessageAsync(args.Message);
         }
     }
-
 
     private Task ErrorHandler(ProcessErrorEventArgs args)
     {
