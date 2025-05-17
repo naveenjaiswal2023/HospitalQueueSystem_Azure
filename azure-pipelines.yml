@@ -13,7 +13,7 @@ stages:
 # CI - Build Stage
 # -------------------
 - stage: Build
-  displayName: 'Build & Publish (.NET 8)'
+  displayName: 'Build & Test (.NET 8)'
   jobs:
     - job: Build
       displayName: 'Build Job'
@@ -39,6 +39,20 @@ stages:
             command: 'build'
             projects: '**/*.csproj'
             arguments: '--configuration $(buildConfiguration)'
+
+        - task: DotNetCoreCLI@2
+          displayName: 'Run Unit Tests'
+          inputs:
+            command: 'test'
+            projects: '../HospitalQueueSystem_Azure/HospitalQueueSystem_Test.csproj'  # Update this if your test project name differs
+            arguments: '--configuration $(buildConfiguration) --no-build --logger trx'
+
+        - task: PublishTestResults@2
+          displayName: 'Publish Test Results'
+          inputs:
+            testResultsFormat: 'VSTest'
+            testResultsFiles: '**/TestResults/*.trx'
+            failTaskOnFailedTests: true
 
         - task: DotNetCoreCLI@2
           displayName: 'Publish Artifacts'
