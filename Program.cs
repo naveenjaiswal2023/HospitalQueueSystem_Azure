@@ -293,3 +293,5 @@ app.MapHub<QueueHub>("/queuehub");
 app.MapGet("/", () => Results.Ok("🏥 Hospital Queue System API is running"));
 
 app.Run();
+
+public partial class Program { }  // This partial class is needed for WebApplicationFactory<T>

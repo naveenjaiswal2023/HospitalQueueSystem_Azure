@@ -7,6 +7,9 @@ using HospitalQueueSystem.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
 using HospitalQueueSystem.Shared.Utilities;
 using Microsoft.AspNetCore.Authorization;
+using HospitalQueueSystem.Application.CommandModel;
+using MediatR;
+using HospitalQueueSystem.Application.DTO;
 
 namespace HospitalQueueSystem.WebAPI.Controllers
 {
@@ -19,32 +22,33 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IUserContextService _userContextService;
         private readonly IWebHostEnvironment _env;
-        public AuthController(IUserContextService userContextService,UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, ITokenService tokenService, IWebHostEnvironment env)
+        private readonly IMediator _mediator;
+        public AuthController(IUserContextService userContextService,UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, ITokenService tokenService, IWebHostEnvironment env, IMediator mediator)
         {
             _userManager = userManager;
             _tokenService = tokenService;
             _signInManager = signInManager;
             _userContextService = userContextService;
             _env = env;
+            _mediator=mediator;
         }
 
         [HttpPost("register-user")]
         [Authorize]
-        public async Task<IActionResult> Register(RegisterRequest model)
+        public async Task<IActionResult> Register([FromBody] RegisterRequest model)
         {
-            var user = new ApplicationUser
+            var command = new RegisterCommand
             {
-                UserName = model.Email,
-                Email = model.Email
+                Email = model.Email,
+                Password = model.Password
             };
 
-            var result = await _userManager.CreateAsync(user, model.Password);
+            var result = await _mediator.Send(command);
 
             if (!result.Succeeded)
-                return BadRequest(result.Errors);
+                return StatusCode(result.StatusCode, result.Response);
 
-            await _userManager.AddToRoleAsync(user, "User"); // default role
-            return Ok("User created successfully");
+            return Ok(result.Response);
         }
 
         [HttpGet("whoami")]
@@ -64,74 +68,38 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest model)
+        public async Task<IActionResult> Login([FromBody] LoginCommand command)
         {
-            try
+            var result = await _mediator.Send(command);
+
+            if (!result.Succeeded)
             {
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest("Invalid login request.");
-                }
-
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user == null)
-                {
-                    return Unauthorized("Invalid credentials.");
-                }
-
-                var passwordValid = await _userManager.CheckPasswordAsync(user, model.Password);
-                if (!passwordValid)
-                {
-                    return Unauthorized("Invalid credentials.");
-                }
-
-                var result = await _signInManager.PasswordSignInAsync(user, model.Password, isPersistent: false, lockoutOnFailure: false);
-                if (result.Succeeded)
-                {
-                    // Token generation here (after login success and no 2FA)
-                    if (await _userManager.GetTwoFactorEnabledAsync(user))
-                    {
-                        var twoFactorCode = await _userManager.GenerateTwoFactorTokenAsync(user, "Email");
-
-                        // TODO: Send `twoFactorCode` via email/SMS
-                        return Ok(new
-                        {
-                            twoFactorRequired = true,
-                            message = "2FA code sent to your email/phone"
-                        });
-                    }
-
-                    // 🔑 Generate JWT token
-                    var token = _tokenService.GenerateToken(user);
-
-                    return Ok(new
-                    {
-                        message = "Login successful",
-                        token
-                    });
-                }
-
                 if (result.IsLockedOut)
-                {
-                    return Forbid("Account is locked out.");
-                }
+                    return Forbid(result.Message);
 
-                if (result.RequiresTwoFactor)
-                {
-                    return Ok(new
-                    {
-                        twoFactorRequired = true,
-                        message = "2FA required."
-                    });
-                }
-
-                return Unauthorized("Invalid login attempt.");
+                return Unauthorized(result.Message);
             }
-            catch (Exception ex)
+
+            if (result.TwoFactorRequired)
             {
-                // Log error here
-                return StatusCode(500, "An unexpected error occurred.");
+                return Ok(new
+                {
+                    twoFactorRequired = true,
+                    message = result.Message
+                });
             }
+
+            var response = new ResponseResultDto<TokenDto>
+            {
+                Succeeded = result.Succeeded,
+                Message = result.Message,
+                Data = new TokenDto
+                {
+                    Token = ((dynamic?)result.Data)?.Token
+                }
+            };
+
+            return Ok(response);
         }
 
 

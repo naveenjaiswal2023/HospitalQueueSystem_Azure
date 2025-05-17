@@ -116,12 +116,46 @@ public class AzureBusBackgroundService : BackgroundService
         return Task.CompletedTask;
     }
 
+    //public override async Task StopAsync(CancellationToken cancellationToken)
+    //{
+    //    foreach (var processor in _processors)
+    //    {
+    //        await processor.StopProcessingAsync(cancellationToken);
+    //        await processor.DisposeAsync();
+    //    }
+    //}
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         foreach (var processor in _processors)
         {
-            await processor.StopProcessingAsync(cancellationToken);
-            await processor.DisposeAsync();
+            try
+            {
+                if (processor is not null)
+                {
+                    // Avoid calling StopProcessing on an already disposed processor
+                    await processor.StopProcessingAsync(cancellationToken);
+                    await processor.DisposeAsync();
+                }
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning(ex, "ServiceBusProcessor was already disposed during shutdown.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error occurred while stopping ServiceBusProcessor.");
+            }
         }
+
+        await base.StopAsync(cancellationToken);
     }
+
+    private bool _disposed = false;
+
+    public override void Dispose()
+    {
+        _disposed = true;
+        base.Dispose();
+    }
+
 }
