@@ -33,6 +33,10 @@ builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
 
+builder.Services.Configure<MaintenanceModeOptionsDto>(
+    builder.Configuration.GetSection("MaintenanceMode"));
+
+
 // Add Azure Key Vault secrets if VaultUrl is configured
 var keyVaultUrl = builder.Configuration["AzureKeyVault:VaultUrl"];
 if (!string.IsNullOrEmpty(keyVaultUrl))
@@ -152,6 +156,7 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<PatientController>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
+builder.Services.AddScoped<IQueueRepository, QueueRepository>();
 
 // Event Handlers
 builder.Services.AddScoped<DoctorQueueCreatedEventHandler>();
@@ -173,7 +178,12 @@ builder.Services.AddSignalR();
 
 // In-Memory Caching
 builder.Services.AddMemoryCache(); // Register IMemoryCache
-builder.Services.AddScoped<IPatientCacheService, PatientQueueCacheService>();
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration["Redis:ConnectionString"];
+});
+
+//builder.Services.AddScoped<IPatientCacheService, PatientQueueCacheService>();
 
 // Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
@@ -249,14 +259,37 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
 app.UseRouting();
-app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseIpRateLimiting();
+
+// 🔐 Authentication must come before any custom auth-related middleware
+app.UseAuthentication();
+
+// 🛠 Maintenance mode check (before request processing)
+app.UseMaintenanceMode();
+
+
+// 🔐 Custom Unauthorized Middleware (should come *after* auth, but before authorization)
+//app.UseUnauthorizedMiddleware();
+
+// 🚀 Caching for GETs (optional and safe here)
+//app.UseCachedResponse();
+
+// 🌍 CORS (should be before endpoints that use cross-origin requests)
 app.UseCors();
-app.UseAuthentication(); // Only if you're using JWT or similar
+
+// 🔐 Authorization (must come after UseAuthentication)
 app.UseAuthorization();
-// Endpoints
+
+// 🛡️ Rate Limiting (after routing, before execution)
+app.UseIpRateLimiting();
+
+// 🌐 Custom Exception Handling (should wrap the request pipeline near the end)
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// 🧭 Endpoints
 app.MapControllers();
 app.MapHub<QueueHub>("/queuehub");
 app.MapGet("/", () => Results.Ok("🏥 Hospital Queue System API is running"));
+
 app.Run();

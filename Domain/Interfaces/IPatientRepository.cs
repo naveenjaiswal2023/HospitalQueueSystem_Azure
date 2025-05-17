@@ -8,7 +8,7 @@ namespace HospitalQueueSystem.Domain.Interfaces
         Task AddAsync(Patient patient);
         Task<Patient?> GetByIdAsync(int id);
         Task<List<Patient>> GetAllAsync();
-        Task<int> UpdateAsync(PatientRegisteredEvent model);
+        Task<int> UpdateAsync(Patient model);
         Task<int> DeleteAsync(string patientId);
 
     }

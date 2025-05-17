@@ -1,36 +1,51 @@
-﻿using HospitalQueueSystem.Domain.Entities;
+﻿using Azure.Messaging.ServiceBus;
+using HospitalQueueSystem.Application.EventHandlers;
+using HospitalQueueSystem.Domain.Entities;
 using HospitalQueueSystem.Domain.Events;
 using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.Infrastructure.Data;
 using HospitalQueueSystem.WebAPI.Hubs;
+using MediatR;
 using Microsoft.AspNetCore.SignalR;
+using System;
+using System.Text.Json;
+using System.Threading;
 
 namespace HospitalQueueSystem.Application.Handlers
 {
-    public class DoctorQueueCreatedEventHandler
+    public class DoctorQueueCreatedEventHandler : INotificationHandler<DoctorQueueCreatedEvent>
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IHubContext<QueueHub> _hubContext;
+        private readonly ServiceBusClient _serviceBusClient;
+        private readonly ILogger<PatientRegisterEventHandler> _logger;
+        private const string TopicName = "patient-topic";
 
-        public DoctorQueueCreatedEventHandler(IUnitOfWork unitOfWork, IHubContext<QueueHub> hubContext)
+        public DoctorQueueCreatedEventHandler(ServiceBusClient serviceBusClient, ILogger<PatientRegisterEventHandler> logger)
         {
-            _unitOfWork = unitOfWork;
-            _hubContext = hubContext;
+            _serviceBusClient = serviceBusClient;
+            _logger = logger;
         }
 
-        public async Task HandleAsync(DoctorQueueCreatedEvent @event)
+        public async Task Handle(DoctorQueueCreatedEvent notification, CancellationToken cancellationToken)
         {
-            var doctorQueue = new DoctorQueue
+            try
             {
-                DoctorId = @event.DoctorId,
-                QueueNumber = @event.QueueNumber,
-                CreatedAt = DateTime.UtcNow
-            };
+                var sender = _serviceBusClient.CreateSender(TopicName);
 
-            //await _unitOfWork.DoctorQueues.AddAsync(doctorQueue);
-            //await _unitOfWork.CompleteAsync();
+                var messageBody = JsonSerializer.Serialize(notification);
+                var message = new ServiceBusMessage(messageBody)
+                {
+                    Subject = "PatientRegisterEventHandler"
+                };
 
-            await _hubContext.Clients.All.SendAsync("DoctorQueueUpdated", doctorQueue);
+                await sender.SendMessageAsync(message, cancellationToken);
+                _logger.LogInformation("Published PatientRegisterEventHandler for PatientId: {PatientId}", notification.PatientId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to publish PatientRegisterEventHandler.");
+            }
         }
     }
 

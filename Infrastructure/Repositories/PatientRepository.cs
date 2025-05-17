@@ -31,7 +31,7 @@ namespace HospitalQueueSystem.Infrastructure.Repositories
             return await _context.Patients.ToListAsync();
         }
 
-        public async Task<int> UpdateAsync(PatientRegisteredEvent model)
+        public async Task<int> UpdateAsync(Patient model)
         {
             var patientIdParam = new SqlParameter("@PatientId", model.PatientId);
             var nameParam = new SqlParameter("@Name", model.Name);

@@ -1,11 +1,22 @@
-﻿namespace HospitalQueueSystem.Domain.Events
+﻿using HospitalQueueSystem.Domain.Common;
+using MediatR;
+
+namespace HospitalQueueSystem.Domain.Events
 {
-    public class DoctorQueueCreatedEvent
+    public class DoctorQueueCreatedEvent : IDomainEvent, INotification
     {
-        public string DoctorId { get; set; }
-        public string DoctorName { get; set; } = string.Empty;
-        public int StartingToken { get; set; } = 1;
-        public int QueueNumber { get; set; } // 👈 Ensure this line is present
-        
+        public string PatientId { get; }
+        public string DoctorId { get; }
+        public string Status { get; }
+        public string QueueNumber { get; }
+
+        public DoctorQueueCreatedEvent(string patientId, string doctorId, string status, string queueNumber)
+        {
+            PatientId = patientId;
+            DoctorId = doctorId;
+            Status = status;
+            QueueNumber = queueNumber;
+        }
+
     }
 }

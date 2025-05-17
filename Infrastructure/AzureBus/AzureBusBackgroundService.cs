@@ -80,7 +80,7 @@ public class AzureBusBackgroundService : BackgroundService
                     var deletedEvent = JsonSerializer.Deserialize<PatientDeletedEvent>(body);
                     if (deletedEvent != null)
                     {
-                        var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
+                        //var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
                         //await cacheService.RemovePatientFromCacheAsync(deletedEvent.PatientId);
                         await _hubContext.Clients.All.SendAsync("PatientDeleted", deletedEvent);
                     }

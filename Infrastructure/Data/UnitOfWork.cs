@@ -11,14 +11,33 @@ namespace HospitalQueueSystem.Infrastructure.Data
         private readonly ApplicationDbContext _dbContext;
         private IDbContextTransaction _transaction;
 
-        public IPatientRepository Patients { get; }
+        public IPatientRepository _PatientsRepository;
+        private IQueueRepository _queueRepository;
 
         public ApplicationDbContext Context => _dbContext;
 
-        public UnitOfWork(ApplicationDbContext dbContext, IPatientRepository patientRepository)
+       // public IPatientRepository Patients => throw new NotImplementedException();
+        public IPatientRepository PatientRepository
+        {
+            get
+            {
+                return _PatientsRepository ??= new PatientRepository(_dbContext);
+            }
+        }
+
+        public IQueueRepository QueueRepository
+        {
+            get
+            {
+                return _queueRepository ??= new QueueRepository(_dbContext);
+            }
+        }
+
+        public UnitOfWork(ApplicationDbContext dbContext, IPatientRepository patientRepository, IQueueRepository queueRepository)
         {
             _dbContext = dbContext;
-            Patients = patientRepository;
+            _PatientsRepository = patientRepository;
+            _queueRepository = queueRepository;
         }
 
         // Start a new transaction

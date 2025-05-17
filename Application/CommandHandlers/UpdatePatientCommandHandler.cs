@@ -40,6 +40,7 @@ namespace HospitalQueueSystem.Application.Handlers
                 }
 
                 patient.UpdateDetails(request.Name, request.Age, request.Gender, request.Department);
+                await _unitOfWork.PatientRepository.UpdateAsync(patient); // Fix: Ensure the UpdateAsync method in IPatientRepository accepts a Patient entity.
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 foreach (var domainEvent in patient.DomainEvents)

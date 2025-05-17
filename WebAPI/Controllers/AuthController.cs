@@ -18,12 +18,14 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         private readonly ITokenService _tokenService;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IUserContextService _userContextService;
-        public AuthController(IUserContextService userContextService,UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, ITokenService tokenService)
+        private readonly IWebHostEnvironment _env;
+        public AuthController(IUserContextService userContextService,UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, ITokenService tokenService, IWebHostEnvironment env)
         {
             _userManager = userManager;
             _tokenService = tokenService;
             _signInManager = signInManager;
             _userContextService = userContextService;
+            _env = env;
         }
 
         [HttpPost("register-user")]
@@ -142,7 +144,17 @@ namespace HospitalQueueSystem.WebAPI.Controllers
                 return Unauthorized("User not found.");
             }
 
-            var result = await _signInManager.TwoFactorAuthenticatorSignInAsync(model.TwoFactorCode,model.RememberMe,model.RememberMachine);
+            if (_env.IsDevelopment()) // Only in Development!
+            {
+                await _signInManager.SignInAsync(user, model.RememberMe);
+                return Ok(new { message = "Login successful (2FA bypassed in development)" });
+            }
+
+            var result = await _signInManager.TwoFactorAuthenticatorSignInAsync(
+                model.TwoFactorCode.Replace(" ", "").Replace("-", ""),
+                model.RememberMe,
+                model.RememberMachine
+            );
 
             if (result.Succeeded)
             {

@@ -36,6 +36,7 @@ namespace HospitalQueueSystem.Application.Handlers
                 }
 
                 var patient = new Patient(request.Name, request.Age, request.Gender, request.Department);
+                await _unitOfWork.PatientRepository.AddAsync(patient);
                 _unitOfWork.Context.Patients.Add(patient);
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
