@@ -21,7 +21,7 @@ namespace HospitalQueueSystem.Application.CommandModel
         }
 
         // Optional constructor overload for convenience if you're passing an event/model
-        public UpdatePatientCommand(PatientRegisteredEvent patient)
+        public UpdatePatientCommand(PatientUpdatedEvent patient)
         {
             PatientId = patient.PatientId;
             Name = patient.Name;
