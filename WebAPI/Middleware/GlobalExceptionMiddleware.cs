@@ -2,17 +2,16 @@
 
 namespace HospitalQueueSystem.WebAPI.Middleware
 {
-    public class ExceptionHandlingMiddleware
+    public class GlobalExceptionMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+        private readonly ILogger<GlobalExceptionMiddleware> _logger;
 
-        public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+        public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
         {
             _next = next;
             _logger = logger;
         }
-
         public async Task Invoke(HttpContext context)
         {
             try

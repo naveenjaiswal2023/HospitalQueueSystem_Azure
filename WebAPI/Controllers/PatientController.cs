@@ -30,20 +30,21 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         }
 
         [HttpPost("RegisterPatient")]
-        public async Task<IActionResult> RegisterPatient([FromBody] RegisterPatientDto dto)
+        public async Task<IActionResult> RegisterPatient([FromBody] PatientRegisteredEvent model)
         {
             try
             {
-                if (dto == null ||
-                    string.IsNullOrWhiteSpace(dto.Name) ||
-                    string.IsNullOrWhiteSpace(dto.Gender) ||
-                    string.IsNullOrWhiteSpace(dto.Department) ||
-                    dto.Age <= 0)
+                if (model == null ||
+                    string.IsNullOrWhiteSpace(model.Name) ||
+                    string.IsNullOrWhiteSpace(model.Gender) ||
+                    string.IsNullOrWhiteSpace(model.Department) ||
+                    model.Age <= 0)
                 {
                     return BadRequest("Invalid patient data.");
                 }
 
-                var command = new RegisterPatientCommand(dto.Name, dto.Age, dto.Gender, dto.Department);
+                // Updated to pass the required parameters to RegisterPatientCommand
+                var command = new RegisterPatientCommand(model.Name, model.Age, model.Gender, model.Department);
                 var result = await _mediator.Send(command);
 
                 if (result)
@@ -76,7 +77,7 @@ namespace HospitalQueueSystem.WebAPI.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdatePatient(string id, [FromBody] PatientRegisteredEvent model)
+        public async Task<IActionResult> UpdatePatient(string id, [FromBody] PatientUpdatedEvent model)
         {
             try
             {

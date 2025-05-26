@@ -183,8 +183,6 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = builder.Configuration["Redis:ConnectionString"];
 });
 
-//builder.Services.AddScoped<IPatientCacheService, PatientQueueCacheService>();
-
 // Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
 builder.Services.AddInMemoryRateLimiting();
@@ -285,7 +283,7 @@ app.UseAuthorization();
 app.UseIpRateLimiting();
 
 // 🌐 Custom Exception Handling (should wrap the request pipeline near the end)
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 // 🧭 Endpoints
 app.MapControllers();
