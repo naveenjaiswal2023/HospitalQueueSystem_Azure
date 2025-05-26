@@ -16,12 +16,12 @@ namespace HospitalQueueSystem.Infrastructure.Repositories
 
         public async Task<QueueEntry> GetByIdAsync(string id)
         {
-            return await _context.QueueEntry.FindAsync(id);
+            return await _context.QueueEntries.FindAsync(id);
         }
 
         public async Task<List<QueueEntry>> GetQueueByDoctorIdAsync(int doctorId)
         {
-            return await _context.QueueEntry
+            return await _context.QueueEntries
                 .Where(q => q.DoctorId == doctorId.ToString() && q.Status == "Called")
                 .OrderBy(q => q.CreatedAt)
                 .ToListAsync();
@@ -29,13 +29,13 @@ namespace HospitalQueueSystem.Infrastructure.Repositories
 
         public Task AddAsync(QueueEntry entry)
         {
-            _context.QueueEntry.Add(entry);
+            _context.QueueEntries.Add(entry);
             return Task.CompletedTask;
         }
 
         public Task UpdateAsync(QueueEntry entry)
         {
-            _context.QueueEntry.Update(entry);
+            _context.QueueEntries.Update(entry);
             return Task.CompletedTask;
         }
     }

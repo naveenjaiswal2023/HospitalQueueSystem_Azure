@@ -7,11 +7,11 @@ using Microsoft.AspNetCore.Identity;
 
 namespace HospitalQueueSystem.Application.CommandHandlers
 {
-    public class RegisterCommandHandler : IRequestHandler<RegisterCommand, ICommandResult>
+    public class RegisterUserCommandHandler : IRequestHandler<RegisterCommand, ICommandResult>
     {
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public RegisterCommandHandler(UserManager<ApplicationUser> userManager)
+        public RegisterUserCommandHandler(UserManager<ApplicationUser> userManager)
         {
             _userManager = userManager;
         }

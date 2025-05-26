@@ -12,7 +12,7 @@ namespace HospitalQueueSystem.Domain.Entities
         public string DoctorId { get; private set; }
         public string Status { get; private set; } // Waiting, Called, Skipped
         public string QueueNumber { get; private set; }
-        public DateTime CreatedAt { get; private set; }
+        //public DateTime CreatedAt { get; private set; }
 
         public QueueEntry(string patientId, string doctorId, string status, string queueNumber)
         {

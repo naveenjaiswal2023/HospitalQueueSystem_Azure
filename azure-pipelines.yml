@@ -6,16 +6,17 @@
 
 variables:
   buildConfiguration: 'Release'
+  azureSubscription: 'RamsanAzureServiceCon'
 
 stages:
 
-# -------------------
-# CI - Build Stage
-# -------------------
+# ------------------------------------------------------
+# CI: Build & Test
+# ------------------------------------------------------
 - stage: Build
-  displayName: 'Build & Test (.NET 8)'
+  displayName: 'Build & Test Stage'
   jobs:
-    - job: Build
+    - job: BuildJob
       displayName: 'Build Job'
       pool:
         vmImage: 'windows-latest'
@@ -28,57 +29,60 @@ stages:
             includePreviewVersions: true
 
         - task: DotNetCoreCLI@2
-          displayName: 'Restore NuGet packages'
+          displayName: 'Restore NuGet Packages'
           inputs:
-            command: 'restore'
+            command: restore
             projects: '**/*.csproj'
 
         - task: DotNetCoreCLI@2
           displayName: 'Build Solution'
           inputs:
-            command: 'build'
+            command: build
             projects: '**/*.csproj'
             arguments: '--configuration $(buildConfiguration)'
 
         - task: DotNetCoreCLI@2
           displayName: 'Run Unit Tests'
           inputs:
-            command: 'test'
-            projects: '../HospitalQueueSystem_Azure/HospitalQueueSystem_Test.csproj'  # Update this if your test project name differs
+            command: test
+            projects: '**/*Test*.csproj'
             arguments: '--configuration $(buildConfiguration) --no-build --logger trx'
 
         - task: PublishTestResults@2
-          displayName: 'Publish Test Results'
           inputs:
-            testResultsFormat: 'VSTest'
+            testResultsFormat: VSTest
             testResultsFiles: '**/TestResults/*.trx'
-            failTaskOnFailedTests: true
 
         - task: DotNetCoreCLI@2
-          displayName: 'Publish Artifacts'
+          displayName: 'Publish App'
           inputs:
-            command: 'publish'
+            command: publish
             publishWebProjects: true
             arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
             zipAfterPublish: true
 
         - task: PublishBuildArtifacts@1
-          displayName: 'Publish Artifact to Pipeline'
+          displayName: 'Publish Artifact'
           inputs:
             PathtoPublish: '$(Build.ArtifactStagingDirectory)'
             ArtifactName: 'drop'
             publishLocation: 'Container'
 
-# -------------------
-# CD - Dev Deployment
-# -------------------
+# ------------------------------------------------------
+# CD: Deploy to Dev
+# ------------------------------------------------------
 - stage: Deploy_Dev
-  displayName: 'Deploy to Dev'
+  displayName: 'Deploy to Development'
   dependsOn: Build
+  variables:
+    environmentName: 'Development'
+    resourceGroupName: 'rg-qms-dev'
+    keyVaultName: 'kv-qms-dev'
+    webAppName: 'qms-app-dev'
   jobs:
     - deployment: DeployDev
-      displayName: 'Deploy Dev Environment'
-      environment: 'Development'
+      displayName: 'Deploy to Dev'
+      environment: $(environmentName)
       strategy:
         runOnce:
           deploy:
@@ -86,25 +90,37 @@ stages:
               - download: current
                 artifact: drop
 
-              - task: AzureWebApp@1
-                displayName: 'Deploy to Azure Web App (Dev)'
+              - task: AzureKeyVault@2
+                displayName: 'Fetch Dev Secrets'
                 inputs:
-                  azureSubscription: 'RamsanAzureServiceCon'
+                  azureSubscription: $(azureSubscription)
+                  KeyVaultName: $(keyVaultName)
+                  SecretsFilter: '*'
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy to Dev App Service'
+                inputs:
+                  azureSubscription: $(azureSubscription)
                   appType: 'webApp'
-                  appName: 'HospitalQueueSystem-Dev'
+                  appName: $(webAppName)
                   package: '$(Pipeline.Workspace)/drop/**/*.zip'
 
-# -------------------
-# CD - QA Deployment
-# -------------------
+# ------------------------------------------------------
+# CD: Deploy to QA
+# ------------------------------------------------------
 - stage: Deploy_QA
   displayName: 'Deploy to QA'
   dependsOn: Deploy_Dev
   condition: succeeded()
+  variables:
+    environmentName: 'Staging'
+    resourceGroupName: 'rg-qms-stg'
+    keyVaultName: 'kv-qms-stg'
+    webAppName: 'HospitalQueueSystem-QA'
   jobs:
     - deployment: DeployQA
-      displayName: 'Deploy QA Environment'
-      environment: 'Staging'
+      displayName: 'Deploy to QA'
+      environment: $(environmentName)
       strategy:
         runOnce:
           deploy:
@@ -112,25 +128,37 @@ stages:
               - download: current
                 artifact: drop
 
-              - task: AzureWebApp@1
-                displayName: 'Deploy to Azure Web App (QA)'
+              - task: AzureKeyVault@2
+                displayName: 'Fetch QA Secrets'
                 inputs:
-                  azureSubscription: 'RamsanAzureServiceCon'
+                  azureSubscription: $(azureSubscription)
+                  KeyVaultName: $(keyVaultName)
+                  SecretsFilter: '*'
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy to QA App Service'
+                inputs:
+                  azureSubscription: $(azureSubscription)
                   appType: 'webApp'
-                  appName: 'HospitalQueueSystem-QA'
+                  appName: $(webAppName)
                   package: '$(Pipeline.Workspace)/drop/**/*.zip'
 
-# -------------------
-# CD - Prod Deployment (with Rollback Logic)
-# -------------------
+# ------------------------------------------------------
+# CD: Deploy to Prod with Rollback
+# ------------------------------------------------------
 - stage: Deploy_Prod
-  displayName: 'Deploy to Prod'
+  displayName: 'Deploy to Production'
   dependsOn: Deploy_QA
   condition: succeeded()
+  variables:
+    environmentName: 'Production'
+    resourceGroupName: 'rg-qms-prod'
+    keyVaultName: 'kv-qms-prod'
+    webAppName: 'HospitalQueueSystem'
   jobs:
     - deployment: DeployProd
-      displayName: 'Deploy Prod Environment'
-      environment: 'Production'
+      displayName: 'Deploy to Prod'
+      environment: $(environmentName)
       strategy:
         runOnce:
           deploy:
@@ -138,16 +166,22 @@ stages:
               - download: current
                 artifact: drop
 
-              # Main Deployment
-              - task: AzureWebApp@1
-                displayName: 'Deploy to Azure Web App (Prod)'
+              - task: AzureKeyVault@2
+                displayName: 'Fetch Prod Secrets'
                 inputs:
-                  azureSubscription: 'RamsanAzureServiceCon'
+                  azureSubscription: $(azureSubscription)
+                  KeyVaultName: $(keyVaultName)
+                  SecretsFilter: '*'
+
+              - task: AzureWebApp@1
+                displayName: 'Deploy to Prod App Service'
+                inputs:
+                  azureSubscription: $(azureSubscription)
                   appType: 'webApp'
-                  appName: 'HospitalQueueSystem'
+                  appName: $(webAppName)
                   package: '$(Pipeline.Workspace)/drop/**/*.zip'
 
-              # Save this good artifact for rollback
+              # Cache Artifact for Rollback
               - task: CopyFiles@2
                 displayName: 'Cache Artifact for Rollback'
                 condition: succeeded()
@@ -156,20 +190,18 @@ stages:
                   Contents: '**/*.zip'
                   TargetFolder: '$(Pipeline.Workspace)/rollback'
 
-              # 🔁 Rollback Step
+              # Rollback if deployment fails
               - task: AzureCLI@2
-                displayName: 'Rollback Deployment (Previous Stable Build)'
+                displayName: 'Rollback to Previous Build'
                 condition: failed()
                 inputs:
-                  azureSubscription: 'RamsanAzureServiceCon'
+                  azureSubscription: $(azureSubscription)
                   scriptType: 'ps'
                   scriptLocation: 'inlineScript'
                   inlineScript: |
-                    Write-Host "Deployment failed. Initiating rollback..."
-
+                    Write-Host "Deployment failed. Rolling back..."
                     $zipPath = "$(Pipeline.Workspace)/rollback/**/*.zip"
-
                     az webapp deployment source config-zip `
-                      --resource-group "Your-Resource-Group-Name" `
-                      --name "HospitalQueueSystem" `
+                      --resource-group "$(resourceGroupName)" `
+                      --name "$(webAppName)" `
                       --src $zipPath
