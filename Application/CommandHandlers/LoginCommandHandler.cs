@@ -53,13 +53,20 @@ namespace HospitalQueueSystem.Application.CommandHandlers
                         };
                     }
 
-                    var token = await _tokenService.GenerateToken(user);
+                    //var token = await _tokenService.GenerateToken(user);
 
+                    //return new ResponseResultDto<object>
+                    //{
+                    //    Succeeded = true,
+                    //    Message = "Login successful",
+                    //    Data = new { Token = token }
+                    //};
+                    var tokenDto = await _tokenService.GenerateToken(user);
                     return new ResponseResultDto<object>
                     {
                         Succeeded = true,
                         Message = "Login successful",
-                        Data = new { Token = token }
+                        Data = tokenDto // <-- Not anonymous
                     };
                 }
 

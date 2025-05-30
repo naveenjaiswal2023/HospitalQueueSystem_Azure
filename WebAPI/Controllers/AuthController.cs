@@ -89,14 +89,27 @@ namespace HospitalQueueSystem.WebAPI.Controllers
                 });
             }
 
+            //var response = new ResponseResultDto<TokenDto>
+            //{
+            //    Succeeded = result.Succeeded,
+            //    Message = result.Message,
+            //    Data = new TokenDto
+            //    {
+            //        Token = ((dynamic?)result.Data)?.Token,
+            //        //RefreshToken = ((dynamic?)result.Data)?.RefreshToken,
+            //        Expiration = ((dynamic?)result.Data)?.Expiration,
+            //        // UserId and Role can be added if needed
+            //        //UserId = ((dynamic?)result.Data)?.UserId,
+            //        //Role = ((dynamic?)result.Data)?.Role
+
+            //    }
+            //};
+
             var response = new ResponseResultDto<TokenDto>
             {
                 Succeeded = result.Succeeded,
                 Message = result.Message,
-                Data = new TokenDto
-                {
-                    Token = ((dynamic?)result.Data)?.Token
-                }
+                Data = (TokenDto)result.Data // ✅ Strongly typed
             };
 
             return Ok(response);

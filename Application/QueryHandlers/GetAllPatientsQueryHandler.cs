@@ -60,7 +60,7 @@ namespace HospitalQueueSystem.Application.QueryHandlers
                     serializedPatients,
                     new DistributedCacheEntryOptions
                     {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1)
                     });
 
                 _logger.LogInformation("Patient list cached to Redis successfully.");

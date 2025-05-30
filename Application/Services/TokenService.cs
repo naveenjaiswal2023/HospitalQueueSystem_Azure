@@ -23,15 +23,15 @@ namespace HospitalQueueSystem.Application.Services
             _userManager = userManager;
         }
 
-        public async Task<string> GenerateToken(ApplicationUser user)
+        public async Task<TokenDto> GenerateToken(ApplicationUser user)
         {
             var userRoles = await _userManager.GetRolesAsync(user);
 
             var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Email, user.Email)
-        };
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id),
+        new Claim(ClaimTypes.Email, user.Email ?? string.Empty)
+    };
 
             foreach (var role in userRoles)
             {
@@ -41,16 +41,31 @@ namespace HospitalQueueSystem.Application.Services
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.Key));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+            var expires = DateTime.UtcNow.AddMinutes(_jwt.ExpiryMinutes);
+
             var token = new JwtSecurityToken(
                 issuer: _jwt.Issuer,
                 audience: _jwt.Audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(_jwt.ExpiryMinutes),
+                expires: expires,
                 signingCredentials: creds
             );
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+            // Optional: generate refresh token here if needed
+            //var refreshToken = GenerateRefreshToken();
+
+            return new TokenDto
+            {
+                Token = tokenString,
+                Expiration = expires,
+                UserId = user.Id,
+                Role = userRoles.FirstOrDefault() ?? string.Empty,
+                //RefreshToken = refreshToken
+            };
         }
+
     }
 
 }

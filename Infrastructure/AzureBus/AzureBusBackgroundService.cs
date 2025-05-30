@@ -1,8 +1,6 @@
 ﻿using Azure.Messaging.ServiceBus;
-using HospitalQueueSystem.Application.Services;
 using HospitalQueueSystem.Domain.Entities;
 using HospitalQueueSystem.Domain.Events;
-using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.WebAPI.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +48,9 @@ public class AzureBusBackgroundService : BackgroundService
         var body = args.Message.Body.ToString();
         var subject = args.Message.Subject;
 
+        _logger.LogInformation($"Received message with subject: {subject}");
+        _logger.LogDebug($"Message body: {body}");
+
         try
         {
             using var scope = _serviceScopeFactory.CreateScope();
@@ -57,47 +58,20 @@ public class AzureBusBackgroundService : BackgroundService
             switch (subject)
             {
                 case nameof(PatientRegisteredEvent):
-                    var registeredEvent = JsonSerializer.Deserialize<PatientRegisteredEvent>(body);
-                    if (registeredEvent != null)
-                    {
-                        var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
-                        await cacheService.AddPatientToCacheAsync(registeredEvent);
-                        await _hubContext.Clients.All.SendAsync("NewPatientRegistered", registeredEvent);
-                    }
+                    await HandleMessage<PatientRegisteredEvent>(body, args, "NewPatientRegistered", subject);
                     break;
 
                 case nameof(PatientUpdatedEvent):
-                    var updatedEvent = JsonSerializer.Deserialize<PatientUpdatedEvent>(body);
-                    if (updatedEvent != null)
-                    {
-                        var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
-                        //await cacheService.UpdatePatientInCacheAsync(updatedEvent);
-                        await _hubContext.Clients.All.SendAsync("PatientUpdated", updatedEvent);
-                    }
+                    await HandleMessage<PatientUpdatedEvent>(body, args, "PatientUpdated", subject);
                     break;
 
                 case nameof(PatientDeletedEvent):
-                    var deletedEvent = JsonSerializer.Deserialize<PatientDeletedEvent>(body);
-                    if (deletedEvent != null)
-                    {
-                        //var cacheService = scope.ServiceProvider.GetRequiredService<IPatientCacheService>();
-                        //await cacheService.RemovePatientFromCacheAsync(deletedEvent.PatientId);
-                        await _hubContext.Clients.All.SendAsync("PatientDeleted", deletedEvent);
-                    }
+                    await HandleMessage<PatientDeletedEvent>(body, args, "PatientDeleted", subject);
                     break;
-
-                //case nameof(DoctorQueueCreatedEvent):
-                //    var doctorQueueEvent = JsonSerializer.Deserialize<DoctorQueueCreatedEvent>(body);
-                //    if (doctorQueueEvent != null)
-                //    {
-                //        var queueService = scope.ServiceProvider.GetRequiredService<IPatientQueueCacheService>();
-                //        await queueService.CallPatientAsync(doctorQueueEvent);
-                //        await _hubContext.Clients.All.SendAsync("PatientCalled", doctorQueueEvent);
-                //    }
-                //    break;
 
                 default:
                     _logger.LogWarning($"Unknown message subject: {subject}");
+                    await args.DeadLetterMessageAsync(args.Message, "Unknown subject", subject);
                     break;
             }
 
@@ -105,57 +79,72 @@ public class AzureBusBackgroundService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error processing message with subject: {subject}");
-            await args.AbandonMessageAsync(args.Message);
+            _logger.LogError(ex, $"Unhandled error while processing message with subject: {subject}");
+            await args.DeadLetterMessageAsync(args.Message, "Unhandled processing error", ex.Message);
+        }
+    }
+
+    private async Task HandleMessage<T>(string body, ProcessMessageEventArgs args, string signalRMethod,string subject)
+    {
+        try
+        {
+            var message = JsonSerializer.Deserialize<T>(body);
+
+            if (message == null)
+            {
+                _logger.LogWarning($"Deserialization of {typeof(T).Name} resulted in null.");
+                await args.DeadLetterMessageAsync(args.Message, "Deserialization failure", $"Failed to deserialize {typeof(T).Name}");
+                return;
+            }
+
+            //await _hubContext.Clients.All.SendAsync(signalRMethod, message);
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", subject, message);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, $"Deserialization failed for type {typeof(T).Name}");
+            await args.DeadLetterMessageAsync(args.Message, "JSON deserialization error", ex.Message);
         }
     }
 
     private Task ErrorHandler(ProcessErrorEventArgs args)
     {
-        _logger.LogError(args.Exception, $"Service Bus Error: EntityPath={args.EntityPath}");
+        _logger.LogError(args.Exception, $"Service Bus Error. Entity: {args.EntityPath}, Operation: {args.ErrorSource}");
         return Task.CompletedTask;
     }
 
-    //public override async Task StopAsync(CancellationToken cancellationToken)
-    //{
-    //    foreach (var processor in _processors)
-    //    {
-    //        await processor.StopProcessingAsync(cancellationToken);
-    //        await processor.DisposeAsync();
-    //    }
-    //}
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         foreach (var processor in _processors)
         {
             try
             {
-                if (processor is not null)
+                if (processor != null)
                 {
-                    // Avoid calling StopProcessing on an already disposed processor
                     await processor.StopProcessingAsync(cancellationToken);
                     await processor.DisposeAsync();
                 }
             }
             catch (ObjectDisposedException ex)
             {
-                _logger.LogWarning(ex, "ServiceBusProcessor was already disposed during shutdown.");
+                _logger.LogWarning(ex, "ServiceBusProcessor already disposed.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error occurred while stopping ServiceBusProcessor.");
+                _logger.LogError(ex, "Error while stopping ServiceBusProcessor.");
             }
         }
 
         await base.StopAsync(cancellationToken);
     }
 
-    private bool _disposed = false;
-
     public override void Dispose()
     {
-        _disposed = true;
+        foreach (var processor in _processors)
+        {
+            processor?.DisposeAsync().AsTask().Wait();
+        }
+
         base.Dispose();
     }
-
 }

@@ -40,8 +40,13 @@ namespace HospitalQueueSystem.Application.Handlers
                 }
 
                 patient.UpdateDetails(request.Name, request.Age, request.Gender, request.Department);
-                await _unitOfWork.PatientRepository.UpdateAsync(patient); // Fix: Ensure the UpdateAsync method in IPatientRepository accepts a Patient entity.
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                var updateCount = await _unitOfWork.PatientRepository.UpdateAsync(patient); // Fix: Ensure the UpdateAsync method in IPatientRepository accepts a Patient entity.
+                //await _unitOfWork.SaveChangesAsync(cancellationToken);
+                if (updateCount == 0)
+                {
+                    _logger.LogWarning("Update failed: No rows affected for Patient ID {PatientId}", request.PatientId);
+                    return false;
+                }
 
                 foreach (var domainEvent in patient.DomainEvents)
                 {

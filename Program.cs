@@ -1,29 +1,30 @@
-﻿using Azure.Messaging.ServiceBus;
-using HospitalQueueSystem.Application.Services;
+﻿using AspNetCoreRateLimit;
+using Azure.Identity;
+using Azure.Messaging.ServiceBus;
+using HospitalQueueSystem.Application.Common;
+using HospitalQueueSystem.Application.DTO;
 using HospitalQueueSystem.Application.Handlers;
+using HospitalQueueSystem.Application.Services;
 using HospitalQueueSystem.Domain.Entities;
+using HospitalQueueSystem.Domain.Events;
 using HospitalQueueSystem.Domain.Interfaces;
 using HospitalQueueSystem.Infrastructure.Data;
+using HospitalQueueSystem.Infrastructure.Events;
 using HospitalQueueSystem.Infrastructure.Repositories;
+using HospitalQueueSystem.Infrastructure.Seed;
+using HospitalQueueSystem.Infrastructure.SignalR;
+using HospitalQueueSystem.Shared.Utilities;
 using HospitalQueueSystem.WebAPI.Controllers;
 using HospitalQueueSystem.WebAPI.Hubs;
+using HospitalQueueSystem.WebAPI.Middleware;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using HospitalQueueSystem.Domain.Events;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using HospitalQueueSystem.Infrastructure.Seed;
-using Microsoft.AspNetCore.Identity;
-using HospitalQueueSystem.Shared.Utilities;
-using HospitalQueueSystem.Application.Common;
-using HospitalQueueSystem.Infrastructure.Events;
-using HospitalQueueSystem.Application.DTO;
-using AspNetCoreRateLimit;
 using Serilog;
 using Serilog.Events;
-using Azure.Identity;
 using System.Text;
-using HospitalQueueSystem.WebAPI.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -189,15 +190,33 @@ builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
 // CORS
+//builder.Services.AddCors(options =>
+//{
+//    options.AddDefaultPolicy(policyBuilder =>
+//    {
+//        policyBuilder
+//            .AllowAnyHeader()
+//            .AllowAnyMethod()
+//            .AllowCredentials()
+//            .SetIsOriginAllowed(_ => true); // Allow all origins (for dev)
+//    });
+//});
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policyBuilder =>
     {
         policyBuilder
+            .WithOrigins(
+                "https://localhost:7026"      // React dev server
+                //"https://localhost:4200",      // Angular dev server
+                //"https://yourdomain.com",      // Production frontend
+                //"https://www.yourdomain.com",  // Production frontend with www
+                //"https://staging.yourdomain.com" // Staging environment
+            )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials()
-            .SetIsOriginAllowed(_ => true); // Allow all origins (for dev)
+            .AllowCredentials();
     });
 });
 
@@ -256,38 +275,39 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
-app.UseRouting();
-
-// 🔐 Authentication must come before any custom auth-related middleware
-app.UseAuthentication();
-
-// 🛠 Maintenance mode check (before request processing)
-app.UseMaintenanceMode();
-
-
-// 🔐 Custom Unauthorized Middleware (should come *after* auth, but before authorization)
-//app.UseUnauthorizedMiddleware();
-
-// 🚀 Caching for GETs (optional and safe here)
-//app.UseCachedResponse();
-
-// 🌍 CORS (should be before endpoints that use cross-origin requests)
-app.UseCors();
-
-// 🔐 Authorization (must come after UseAuthentication)
-app.UseAuthorization();
-
-// 🛡️ Rate Limiting (after routing, before execution)
-app.UseIpRateLimiting();
-
-// 🌐 Custom Exception Handling (should wrap the request pipeline near the end)
+// 🛡️ Global Exception Handling (should be FIRST to catch all exceptions)
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
-// 🧭 Endpoints
+// 🌐 HTTPS Redirection (early in pipeline for security)
+app.UseHttpsRedirection();
+
+// 🛠️ Maintenance Mode Check (early check before processing requests)
+app.UseMaintenanceMode();
+
+// 🚦 Rate Limiting (protect your API early, before expensive operations)
+app.UseIpRateLimiting();
+
+// 🌐 Routing (establishes route context)
+app.UseRouting();
+
+// 🌍 CORS (after routing, before auth - needs route context)
+app.UseCors();
+
+// 🔐 Authentication (must come before authorization)
+app.UseAuthentication();
+
+// 🔐 Custom Unauthorized Middleware (after auth, before authorization)
+// app.UseUnauthorizedMiddleware();
+
+// 🔐 Authorization (must come after authentication)
+app.UseAuthorization();
+
+// 🚀 Response Caching (after auth/authz, before controllers)
+// app.UseCachedResponse();
+
+// 🧭 Endpoints (final step - actual request processing)
 app.MapControllers();
-app.MapHub<QueueHub>("/queuehub");
+app.MapHub<NotificationHub>("/NotificationHub");
 app.MapGet("/", () => Results.Ok("🏥 Hospital Queue System API is running"));
 
 app.Run();

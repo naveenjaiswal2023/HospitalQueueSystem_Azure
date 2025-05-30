@@ -7,9 +7,9 @@ namespace HospitalQueueSystem.Application.EventHandlers
 {
     public class PatientCalledEventHandler : INotificationHandler<PatientCalledEvent>
     {
-        private readonly IHubContext<QueueHub> _hubContext;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
-        public PatientCalledEventHandler(IHubContext<QueueHub> hubContext)
+        public PatientCalledEventHandler(IHubContext<NotificationHub> hubContext)
         {
             _hubContext = hubContext;
         }

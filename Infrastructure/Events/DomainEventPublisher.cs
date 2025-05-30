@@ -19,7 +19,7 @@ namespace HospitalQueueSystem.Infrastructure.Events
             _logger = logger;
         }
 
-        public async Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken)
+        public async Task PublishAsync<T>(T domainEvent, CancellationToken cancellationToken) where T : IDomainEvent
         {
             try
             {

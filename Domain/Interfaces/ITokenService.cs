@@ -1,9 +1,10 @@
-﻿using HospitalQueueSystem.Infrastructure.Data;
+﻿using HospitalQueueSystem.Application.DTO;
+using HospitalQueueSystem.Infrastructure.Data;
 
 namespace HospitalQueueSystem.Domain.Interfaces
 {
     public interface ITokenService
     {
-        Task<string> GenerateToken(ApplicationUser user);
+        Task<TokenDto> GenerateToken(ApplicationUser user);
     }
 }
